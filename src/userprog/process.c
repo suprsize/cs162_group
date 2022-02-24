@@ -71,47 +71,51 @@ pid_t process_execute(const char* file_name) {
  * WARNING: Does NOT handle stdin, stderr, or stdout.
  * */
 static struct file* get_file(int fd) {
-  struct thread* t = thread_current();
-  struct process* = t->pcb;
-  struct element *e;
+  struct process* process = thread_current()->pcb;
+  struct list_elem *e;
+  struct list* fd_table = &(process->file_descriptors);
 
   if (fd < 3)
     return NULL;
 
   int i = 3;
-  for (e = list_begin(&process->file_descriptors);
-      e != list_end(&process->file_descriptors);
+  for (e = list_begin(fd_table);
+      e != list_end(fd_table);
       e = list_next(e)) {
     if (i == fd)
-      return (struct file*) list_entry(e, struct file, elem);
+      return list_entry(e, struct file, elem);
     i += 1;
   }
   return NULL;
 }
 
 /* Writes to a file descriptor from buffer count times. */
-static int write_file(int fd, uint32_t* buffer, size_t count) {
+int write_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
   switch (fd) {
 
     case STDIN_FILENO:
+      for (unsigned int i = 0; i < count; i += 1) {
+        input_putc(buffer[i]);
+      }
       break;
 
     case STDOUT_FILENO:
-      putbuf(buffer, count);
+      putbuf((char *) buffer, count);
       retval = count;
       break;
 
     case 2:
       break;
 
-    default:
-      struct file* f = get_file(fd);
+    default: {
+      struct file * f = get_file(fd);
       if (f == NULL) {
         break;
       }
-      retval = file_write(f, buffer, counter, f->pos);
+      retval = file_write(f, buffer, count);//, f->pos);
       f->pos += retval;
+   }
   }
   return retval;
 }
@@ -142,8 +146,6 @@ static void start_process(void* file_name_) {
     // initialize the file descriptor table
     list_init(&(t->pcb->file_descriptors));
 
-    // initalize stdin
-    input_init();
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -529,7 +531,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = PHYS_BASE;
+      *esp = PHYS_BASE - 20;
     else
       palloc_free_page(kpage);
   }

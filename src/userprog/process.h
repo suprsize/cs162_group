@@ -32,6 +32,8 @@ struct process {
 
 void userprog_init(void);
 
+int write_file(int fd, uint32_t* buffer, size_t count);
+
 
 /* Provides an interface for the parent process to keep
  * track of the return status code of the child proc. 

@@ -19,11 +19,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-  printf("System call number: %d\n", args[0]);
+//  printf("System call number: %d\n", args[0]);
 
   switch (args[0]) {
 
-    case SYS_WRITE:
+    case SYS_WRITE: {
       int fd = args[1];
       uint32_t* buffer = args[2];
       // TODO valdate the buffer
@@ -32,14 +32,17 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       int retval = write_file(fd, buffer, count);
       f->eax = retval;
       break;
+                    }
 
-    case SYS_EXIT:
+    case SYS_EXIT: {
       f->eax = args[1];
       printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
       process_exit();
       break;
+                   }
 
     default:
+      break;
       //
   }
 }
