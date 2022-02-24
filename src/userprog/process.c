@@ -67,6 +67,55 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
+/* Returns a file from a given fd.
+ * WARNING: Does NOT handle stdin, stderr, or stdout.
+ * */
+static struct file* get_file(int fd) {
+  struct thread* t = thread_current();
+  struct process* = t->pcb;
+  struct element *e;
+
+  if (fd < 3)
+    return NULL;
+
+  int i = 3;
+  for (e = list_begin(&process->file_descriptors);
+      e != list_end(&process->file_descriptors);
+      e = list_next(e)) {
+    if (i == fd)
+      return (struct file*) list_entry(e, struct file, elem);
+    i += 1;
+  }
+  return NULL;
+}
+
+/* Writes to a file descriptor from buffer count times. */
+static int write_file(int fd, uint32_t* buffer, size_t count) {
+  int retval = -1;
+  switch (fd) {
+
+    case STDIN_FILENO:
+      break;
+
+    case STDOUT_FILENO:
+      putbuf(buffer, count);
+      retval = count;
+      break;
+
+    case 2:
+      break;
+
+    default:
+      struct file* f = get_file(fd);
+      if (f == NULL) {
+        break;
+      }
+      retval = file_write(f, buffer, counter, f->pos);
+      f->pos += retval;
+  }
+  return retval;
+}
+
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* file_name_) {
@@ -89,6 +138,12 @@ static void start_process(void* file_name_) {
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+
+    // initialize the file descriptor table
+    list_init(&(t->pcb->file_descriptors));
+
+    // initalize stdin
+    input_init();
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -145,6 +200,9 @@ int process_wait(pid_t child_pid UNUSED) {
 void process_exit(void) {
   struct thread* cur = thread_current();
   uint32_t* pd;
+
+  //TODO free the file descriptor table
+  // remove the elements from the fd list
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
