@@ -145,8 +145,6 @@ static void start_process(void* file_name_) {
 
     // initialize the file descriptor table
     list_init(&(t->pcb->file_descriptors));
-
-
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -175,33 +173,95 @@ static void start_process(void* file_name_) {
     thread_exit();
   }
 
-  char *s = (char *) file_name_;
+  /* James' Suggestion Begin */
 
-  char *token, *save_ptr;
-  unsigned int argc = 0;
-  uint32_t listPointers[100];
-  for (token = strtok_r(s, " ", &save_ptr); token != NULL;
+  /* Duplicate file_name for argument passing */
+
+  /* Initialize buffer with len + 1 (for \0) */
+  char file_name_copy[strlen(file_name) + 1];
+
+  /* Copy file_name to file_name_copy with null term */
+  strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
+
+  /* Arguments can take up to a page of memory */
+  char *argv[] = palloc_get_page(0); int argc = 0;
+
+  char *token, *save_ptr; int _size;
+
+  for (token = strok_r(file_name_copy, " ", &save_ptr); token != NULL;
     token = strtok_r(NULL, " ", &save_ptr)) {
-      listPointers[argc] = (uint32_t) token;
-      printf("%p\n", token);
-      argc++;
-    }
-  unsigned int align = ((uint32_t) if_.esp) % 16;
-  unsigned int zero = 0;
-  printf("%p", if_.esp);
-  if_.esp -= align;
-  if_.esp -= sizeof(void *);
-  memcpy(if_.esp, &zero, sizeof(void *));
-  for(int i = argc - 1; i >= 0; i--) {
-    if_.esp -= sizeof(void *);
-    memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
+      /* Find size of each token to push onto stack */
+      _size = strlen(token) + 1;
+
+      /* Decrement user stack pointer */
+      if_->esp -= _size;
+
+      /* Store address of token in argument addresses */
+      argv[argc++] = if_->esp;
+
+      /* Copy token to user stack */
+      memcpy(if_->esp, token, _size);
   }
-  uint32_t argv = if_.esp;
-  if_.esp -= sizeof(void *);
-  memcpy((void *) if_.esp, &argv, sizeof(uint32_t));
-  if_.esp -= sizeof(void *);
-  memcpy((void *) if_.esp, &argc, sizeof(unsigned int));
-  if_.esp -= sizeof(void *);
+
+  /* stack-align, addresses are 4B */
+  if_->esp -= ((uint32_t) if_->esp) % 16;
+
+  /* Add NULL pointer sentinel according to spec */
+  argv[argc] = NULL;
+
+  /* Push argv pointers onto stack */
+  _size = sizeof(char *) * (argc + 1);
+  if_->esp -= _size;
+  memcpy(if_->esp, argv, _size);
+
+  /* Push argv */
+  if_->esp -= 4;
+  *((char ***) if_->esp) = if_->esp + 4;
+
+  /* Push argc */
+  if_->esp -= 4;
+  *((int *) if_->esp) = argc;
+
+  /* Push fake "return address" - maintain stack frame structure */
+  if_->esp -= 4;
+
+
+  /* James' Suggestion End */
+
+
+
+
+  // char *s = (char *) file_name_;
+
+  // char *token, *save_ptr;
+  // unsigned int argc = 0;
+  // uint32_t listPointers[100];
+  // for (token = strtok_r(s, " ", &save_ptr); token != NULL;
+  //   token = strtok_r(NULL, " ", &save_ptr)) {
+  //     listPointers[argc] = (uint32_t) token;
+  //     printf("%p\n", token);
+  //     argc++;
+  //   }
+  // unsigned int align = ((uint32_t) if_.esp) % 16;
+  // unsigned int zero = 0;
+  // printf("%p", if_.esp);
+  // if_.esp -= align;
+  // if_.esp -= sizeof(void *);
+  // memcpy(if_.esp, &zero, sizeof(void *));
+  // for(int i = argc - 1; i >= 0; i--) {
+  //   if_.esp -= sizeof(void *);
+  //   memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
+  // }
+  // uint32_t argv = if_.esp;
+  // if_.esp -= sizeof(void *);
+  // memcpy((void *) if_.esp, &argv, sizeof(uint32_t));
+  // if_.esp -= sizeof(void *);
+  // memcpy((void *) if_.esp, &argc, sizeof(unsigned int));
+  // if_.esp -= sizeof(void *);
+
+
+
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
