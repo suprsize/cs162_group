@@ -146,6 +146,31 @@ static void start_process(void* file_name_) {
     // initialize the file descriptor table
     list_init(&(t->pcb->file_descriptors));
 
+    char *s = (char *) file_name_;
+
+    char *token, *save_ptr;
+    unsigned int argc = 0;
+    uint32_t listPointers[100];
+    for (token = strtok_r(s, " ", &save_ptr); token != NULL;
+      token = strtok_r(NULL, " ", &save_ptr)) {
+        listPointers[argc] = (uint32_t) token;
+        argc++;
+      }
+    unsigned int align = ((uint32_t) if_.esp) % 16;
+    unsigned int zero = 0;
+    if_.esp -= align;
+    if_.esp -= sizeof(void *);
+    memcpy(if_.esp, &zero, sizeof(void *));
+    for(int i = argc - 1; i >= 0; i--) {
+      if_.esp -= sizeof(void *);
+      memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
+    }
+    uint32_t argv = if_.esp;
+    if_.esp -= sizeof(void *);
+    memcpy(if_.esp, &argv, sizeof(uint32_t));
+    if_.esp -= sizeof(void *);
+    memcpy(if_.esp, &argc, sizeof(unsigned int));
+    if_.esp -= sizeof(void *);
   }
 
   /* Initialize interrupt frame and load executable. */
