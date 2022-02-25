@@ -27,9 +27,27 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  struct list file_descriptors; /* File descriptor lists */
 };
 
 void userprog_init(void);
+
+int write_file(int fd, uint32_t* buffer, size_t count);
+
+
+/* Provides an interface for the parent process to keep
+ * track of the return status code of the child proc. 
+ */
+struct child_retval {
+
+  bool has_been_locked; /* used to ensure no other proccess is using it. */
+  bool has_been_called;
+
+  int ref_cnt;  /* Determines how many procs are accessing this resource. */
+  int retval; /* The return status code. */
+  struct semaphore* wait_sema; /* semaphore to wait for return code. */
+  struct lock* ref_cnt_lock; /* Lock for ref count. */
+};
 
 pid_t process_execute(const char* file_name);
 int process_wait(pid_t);

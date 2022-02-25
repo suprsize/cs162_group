@@ -67,6 +67,59 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
+/* Returns a file from a given fd.
+ * WARNING: Does NOT handle stdin, stderr, or stdout.
+ * */
+static struct file* get_file(int fd) {
+  struct process* process = thread_current()->pcb;
+  struct list_elem *e;
+  struct list* fd_table = &(process->file_descriptors);
+
+  if (fd < 3)
+    return NULL;
+
+  int i = 3;
+  for (e = list_begin(fd_table);
+      e != list_end(fd_table);
+      e = list_next(e)) {
+    if (i == fd)
+      return list_entry(e, struct file, elem);
+    i += 1;
+  }
+  return NULL;
+}
+
+/* Writes to a file descriptor from buffer count times. */
+int write_file(int fd, uint32_t* buffer, size_t count) {
+  int retval = -1;
+  switch (fd) {
+
+    case STDIN_FILENO:
+      for (unsigned int i = 0; i < count; i += 1) {
+        input_putc(buffer[i]);
+      }
+      break;
+
+    case STDOUT_FILENO:
+      putbuf((char *) buffer, count);
+      retval = count;
+      break;
+
+    case 2:
+      break;
+
+    default: {
+      struct file * f = get_file(fd);
+      if (f == NULL) {
+        break;
+      }
+      retval = file_write(f, buffer, count);//, f->pos);
+      f->pos += retval;
+   }
+  }
+  return retval;
+}
+
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* file_name_) {
@@ -89,6 +142,10 @@ static void start_process(void* file_name_) {
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+
+    // initialize the file descriptor table
+    list_init(&(t->pcb->file_descriptors));
+
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -145,6 +202,9 @@ int process_wait(pid_t child_pid UNUSED) {
 void process_exit(void) {
   struct thread* cur = thread_current();
   uint32_t* pd;
+
+  //TODO free the file descriptor table
+  // remove the elements from the fd list
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -471,7 +531,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = PHYS_BASE;
+      *esp = PHYS_BASE - 20;
     else
       palloc_free_page(kpage);
   }
