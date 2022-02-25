@@ -146,31 +146,7 @@ static void start_process(void* file_name_) {
     // initialize the file descriptor table
     list_init(&(t->pcb->file_descriptors));
 
-    char *s = (char *) file_name_;
 
-    char *token, *save_ptr;
-    unsigned int argc = 0;
-    uint32_t listPointers[100];
-    for (token = strtok_r(s, " ", &save_ptr); token != NULL;
-      token = strtok_r(NULL, " ", &save_ptr)) {
-        listPointers[argc] = (uint32_t) token;
-        argc++;
-      }
-    unsigned int align = ((uint32_t) if_.esp) % 16;
-    unsigned int zero = 0;
-    if_.esp -= align;
-    if_.esp -= sizeof(void *);
-    memcpy(if_.esp, &zero, sizeof(void *));
-    for(int i = argc - 1; i >= 0; i--) {
-      if_.esp -= sizeof(void *);
-      memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
-    }
-    uint32_t argv = if_.esp;
-    if_.esp -= sizeof(void *);
-    memcpy(if_.esp, &argv, sizeof(uint32_t));
-    if_.esp -= sizeof(void *);
-    memcpy(if_.esp, &argc, sizeof(unsigned int));
-    if_.esp -= sizeof(void *);
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -198,6 +174,34 @@ static void start_process(void* file_name_) {
     sema_up(&temporary);
     thread_exit();
   }
+
+  char *s = (char *) file_name_;
+
+  char *token, *save_ptr;
+  unsigned int argc = 0;
+  uint32_t listPointers[100];
+  for (token = strtok_r(s, " ", &save_ptr); token != NULL;
+    token = strtok_r(NULL, " ", &save_ptr)) {
+      listPointers[argc] = (uint32_t) token;
+      printf("%p\n", token);
+      argc++;
+    }
+  unsigned int align = ((uint32_t) if_.esp) % 16;
+  unsigned int zero = 0;
+  printf("%p", if_.esp);
+  if_.esp -= align;
+  if_.esp -= sizeof(void *);
+  memcpy(if_.esp, &zero, sizeof(void *));
+  for(int i = argc - 1; i >= 0; i--) {
+    if_.esp -= sizeof(void *);
+    memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
+  }
+  uint32_t argv = if_.esp;
+  if_.esp -= sizeof(void *);
+  memcpy((void *) if_.esp, &argv, sizeof(uint32_t));
+  if_.esp -= sizeof(void *);
+  memcpy((void *) if_.esp, &argc, sizeof(unsigned int));
+  if_.esp -= sizeof(void *);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -556,7 +560,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = PHYS_BASE - 20;
+      *esp = PHYS_BASE;
     else
       palloc_free_page(kpage);
   }

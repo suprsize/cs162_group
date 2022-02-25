@@ -23,6 +23,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
 
+    case SYS_PRACTICE: {
+      // TODO validate arguments
+      f->eax = args[1] + 1;
+      printf("%d", args[0]);
+      break;
+    }
+
     case SYS_WRITE: {
       int fd = args[1];
       uint32_t* buffer = args[2];
