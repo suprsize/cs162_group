@@ -52,7 +52,8 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
+  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -64,6 +65,15 @@ pid_t process_execute(const char* file_name) {
   tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
+
+
+
+  /* James Begin */
+
+  /* Keep track of children processes */
+
+  /* James End */
+
   return tid;
 }
 
@@ -75,16 +85,32 @@ static struct file* get_file(int fd) {
   struct list_elem *e;
   struct list* fd_table = &(process->file_descriptors);
 
+  /* Suggestion */
+
+  // switch (fd) {
+  //   case 0:
+  //     // Handle STDOUT
+  //     break;
+  //   case 1:
+  //     // Handle STDIN
+  //     break;
+  //   case 2:
+  //     // Handle STDERR
+  //     break;
+  //   default:
+  //     // iterate through for loop as done below
+  // }
+
+  // However, I think they want us to use inodes with the functions they've given us..
+
   if (fd < 3)
     return NULL;
 
   int i = 3;
-  for (e = list_begin(fd_table);
-      e != list_end(fd_table);
-      e = list_next(e)) {
-    if (i == fd)
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    if (i++ == fd) // i++ increments _after_ evaluating
       return list_entry(e, struct file, elem);
-    i += 1;
+    // i += 1;
   }
   return NULL;
 }
@@ -180,7 +206,7 @@ static void start_process(void* file_name_) {
   /* Initialize buffer with len + 1 (for \0) */
   char file_name_copy[strlen(file_name) + 1];
 
-  /* Copy file_name to file_name_copy with null term */
+  /* Copy file_name to file_name_copy with null term using strlcpy */
   strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
   /* Arguments can take up to a page of memory */
@@ -283,7 +309,19 @@ static void start_process(void* file_name_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
+
+  /* James Begin */
+
+  /* sema_down(&temporary); temporary is placeholder */
+
+  /* Suggestion: child_retval, sema_down(&wait_sema); */
+
+  /* run_task in threads/init.c still needs to work correctly
+   after you implement those syscalls, so you probably want to 
+   modify that as well. */
+
+  /* James End */
+
   return 0;
 }
 
@@ -292,14 +330,32 @@ void process_exit(void) {
   struct thread* cur = thread_current();
   uint32_t* pd;
 
-  //TODO free the file descriptor table
-  // remove the elements from the fd list
-
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
     NOT_REACHED();
   }
+
+  // TODO: free the file descriptor table
+  // remove the elements from the fd list
+
+  /* James Begin */
+
+  while(!list_empty(&cur->pcb->file_descriptors)) {
+    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
+    // free(list_entry(e, struct file, elem));
+  }
+
+  /* TODO: "If pid did not call exit but was terminated by the kernel
+    (e.g. killed due to an exception), wait must return -1" 
+    
+    While you can’t rely on the SYS_EXIT syscall, you can rely on every
+    process eventually ending up in the process_exit function. */
+
+  /* Suggestion: child_retval = -1 on exit, so parent->child_pid->retval = -1 */
+
+  /* James End */
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -325,7 +381,7 @@ void process_exit(void) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary);
+  sema_up(&temporary); // TODO: Need to replace temporary - James
   thread_exit();
 }
 

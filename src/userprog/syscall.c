@@ -10,7 +10,7 @@ static void syscall_handler(struct intr_frame*);
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
-  uint32_t* args = ((uint32_t*)f->esp);
+  uint32_t* args = ((uint32_t*) f->esp);
 
   /*
    * The following print statement, if uncommented, will print out the syscall
@@ -23,12 +23,26 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
 
-    case SYS_PRACTICE: {
-      // TODO validate arguments
+    case SYS_PRACTICE:
+      // TODO validate arguments - We'll write a separate, generic function for this before running syscalls
       f->eax = args[1] + 1;
-      printf("%d", args[0]);
       break;
-    }
+
+    /* James Start */
+    
+    case SYS_HALT:
+      shutdown_power_off();
+
+    case SYS_EXEC:
+      f->eax = process_execute((char *) args[1]);
+      break;
+    
+    case SYS_WAIT:
+      f->eax = process_wait(args[1]);
+      break;
+
+    /* James End */
+
 
     case SYS_WRITE: {
       int fd = args[1];
@@ -50,6 +64,5 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     default:
       break;
-      //
   }
 }

@@ -27,7 +27,16 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+
   struct list file_descriptors; /* File descriptor lists */
+
+  /* James Begin */
+
+  struct list children; /* Keep track of children processes and their respective retvals */
+  // struct child_retval child_rv;
+
+  /* James End */
+
 };
 
 void userprog_init(void);
@@ -39,7 +48,6 @@ int write_file(int fd, uint32_t* buffer, size_t count);
  * track of the return status code of the child proc. 
  */
 struct child_retval {
-
   bool has_been_locked; /* used to ensure no other proccess is using it. */
   bool has_been_called;
 
