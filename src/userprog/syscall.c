@@ -28,7 +28,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = args[1] + 1;
       break;
 
-    /* James Start */
+      /**jj
     
     case SYS_HALT:
       shutdown_power_off();
@@ -41,9 +41,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = process_wait(args[1]);
       break;
 
-    /* James End */
 
 
+      */
     case SYS_WRITE: {
       int fd = args[1];
       uint32_t* buffer = args[2];

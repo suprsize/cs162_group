@@ -19,6 +19,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "devices/input.h" 
 
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
@@ -192,15 +193,10 @@ static void start_process(void* file_name_) {
     free(pcb_to_free);
   }
 
-  /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
-  if (!success) {
-    sema_up(&temporary);
-    thread_exit();
-  }
 
   /* James' Suggestion Begin */
 
+  
   /* Duplicate file_name for argument passing */
 
   /* Initialize buffer with len + 1 (for \0) */
@@ -210,49 +206,59 @@ static void start_process(void* file_name_) {
   strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
   /* Arguments can take up to a page of memory */
-  char *argv[] = palloc_get_page(0); int argc = 0;
+  uint32_t *argv = palloc_get_page(0); int argc = 0;
 
   char *token, *save_ptr; int _size;
 
-  for (token = strok_r(file_name_copy, " ", &save_ptr); token != NULL;
+  for (token = strtok_r(file_name_copy, " ", &save_ptr); token != NULL;
     token = strtok_r(NULL, " ", &save_ptr)) {
       /* Find size of each token to push onto stack */
       _size = strlen(token) + 1;
 
       /* Decrement user stack pointer */
-      if_->esp -= _size;
+      if_.esp -= _size;
 
       /* Store address of token in argument addresses */
-      argv[argc++] = if_->esp;
+      argv[argc++] = if_.esp;
 
       /* Copy token to user stack */
-      memcpy(if_->esp, token, _size);
+      memcpy(if_.esp, token, _size);
   }
 
   /* stack-align, addresses are 4B */
-  if_->esp -= ((uint32_t) if_->esp) % 16;
+  if_.esp -= ((uint32_t) if_.esp) % 16;
 
   /* Add NULL pointer sentinel according to spec */
   argv[argc] = NULL;
 
   /* Push argv pointers onto stack */
   _size = sizeof(char *) * (argc + 1);
-  if_->esp -= _size;
-  memcpy(if_->esp, argv, _size);
+  if_.esp -= _size;
+  memcpy(if_.esp, argv, _size);
+
+  uint32_t argv_addr = if_.esp;
 
   /* Push argv */
-  if_->esp -= 4;
-  *((char ***) if_->esp) = if_->esp + 4;
+  if_.esp -= 4;
+  memcpy(if_.esp, &argv_addr, sizeof(uint32_t *));
+  //  *((char ***) if_.esp) = if_.esp + 4;
 
   /* Push argc */
-  if_->esp -= 4;
-  *((int *) if_->esp) = argc;
+  if_.esp -= 4;
+  memcpy(if_.esp, &argc, sizeof(int));
+  //  *((int *) if_.esp) = argc;
 
   /* Push fake "return address" - maintain stack frame structure */
-  if_->esp -= 4;
+  if_.esp -= 4;
 
 
-  /* James' Suggestion End */
+  /* Clean up. Exit on failure or jump to userspace */
+  palloc_free_page(file_name);
+  if (!success) {
+    sema_up(&temporary);
+    thread_exit();
+  }
+  // TODO free argv
 
 
 
@@ -309,6 +315,7 @@ static void start_process(void* file_name_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
+  sema_down(&temporary);
 
   /* James Begin */
 
@@ -339,7 +346,6 @@ void process_exit(void) {
   // TODO: free the file descriptor table
   // remove the elements from the fd list
 
-  /* James Begin */
 
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
