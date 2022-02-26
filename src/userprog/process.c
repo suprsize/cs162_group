@@ -176,6 +176,8 @@ static void start_process(void* file_name_) {
 
   /* Initialize interrupt frame and load executable. */
 
+  int length = strcspn(file_name, " ");
+  char file_name_cpy[length + 1];
 
   if (success) {
     memset(&if_, 0, sizeof if_);
@@ -184,8 +186,6 @@ static void start_process(void* file_name_) {
     if_.eflags = FLAG_IF | FLAG_MBS;
 
 
-    int length = strcspn(file_name, " ");
-    char file_name_cpy[length + 1];
     memcpy(file_name_cpy, file_name, length);
     file_name_cpy[length] = NULL;
     success = load(file_name_cpy, &if_.eip, &if_.esp);
@@ -262,6 +262,9 @@ static void start_process(void* file_name_) {
   /* Push fake "return address" - maintain stack frame structure */
   if_.esp -= sizeof(void *);
 
+
+  /* Change the process name to get rid of the arguments. */
+  strlcpy(t->pcb->process_name, &file_name_cpy, length + 1);
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
