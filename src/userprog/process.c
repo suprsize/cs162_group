@@ -175,12 +175,20 @@ static void start_process(void* file_name_) {
   }
 
   /* Initialize interrupt frame and load executable. */
+
+
   if (success) {
     memset(&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load(file_name, &if_.eip, &if_.esp);
+
+
+    int length = strcspn(file_name, " ");
+    char file_name_cpy[length + 1];
+    memcpy(file_name_cpy, file_name, length);
+    file_name_cpy[length] = NULL;
+    success = load(file_name_cpy, &if_.eip, &if_.esp);
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -196,21 +204,19 @@ static void start_process(void* file_name_) {
 
   /* James' Suggestion Begin */
 
-  
-  /* Duplicate file_name for argument passing */
-
-  /* Initialize buffer with len + 1 (for \0) */
+  /* For tokenization later... */
   char file_name_copy[strlen(file_name) + 1];
-
   /* Copy file_name to file_name_copy with null term using strlcpy */
   strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
+  
 
   /* Arguments can take up to a page of memory */
   uint32_t *argv = palloc_get_page(0); int argc = 0;
 
   char *token, *save_ptr; int _size;
-
-  for (token = strtok_r(file_name_copy, " ", &save_ptr); token != NULL;
+  
+  char NULL_TERMINATOR = 0x0;
+  for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
     token = strtok_r(NULL, " ", &save_ptr)) {
       /* Find size of each token to push onto stack */
       _size = strlen(token) + 1;
@@ -221,8 +227,13 @@ static void start_process(void* file_name_) {
       /* Store address of token in argument addresses */
       argv[argc++] = if_.esp;
 
+      // TODO page fault occurs here
+      // TODO is the if_.esp working
       /* Copy token to user stack */
       memcpy(if_.esp, token, _size);
+
+      /* Null terminate the argv arguments just in case! */
+      memcpy(if_.esp + strlen(token), &NULL_TERMINATOR, 1);
   }
 
   /* stack-align, addresses are 4B */
@@ -239,17 +250,17 @@ static void start_process(void* file_name_) {
   uint32_t argv_addr = if_.esp;
 
   /* Push argv */
-  if_.esp -= 4;
+  if_.esp -= sizeof(void *);
   memcpy(if_.esp, &argv_addr, sizeof(uint32_t *));
   //  *((char ***) if_.esp) = if_.esp + 4;
 
   /* Push argc */
-  if_.esp -= 4;
+  if_.esp -= sizeof(void *);
   memcpy(if_.esp, &argc, sizeof(int));
   //  *((int *) if_.esp) = argc;
 
   /* Push fake "return address" - maintain stack frame structure */
-  if_.esp -= 4;
+  if_.esp -= sizeof(void *);
 
 
   /* Clean up. Exit on failure or jump to userspace */
@@ -258,41 +269,6 @@ static void start_process(void* file_name_) {
     sema_up(&temporary);
     thread_exit();
   }
-  // TODO free argv
-
-
-
-
-  // char *s = (char *) file_name_;
-
-  // char *token, *save_ptr;
-  // unsigned int argc = 0;
-  // uint32_t listPointers[100];
-  // for (token = strtok_r(s, " ", &save_ptr); token != NULL;
-  //   token = strtok_r(NULL, " ", &save_ptr)) {
-  //     listPointers[argc] = (uint32_t) token;
-  //     printf("%p\n", token);
-  //     argc++;
-  //   }
-  // unsigned int align = ((uint32_t) if_.esp) % 16;
-  // unsigned int zero = 0;
-  // printf("%p", if_.esp);
-  // if_.esp -= align;
-  // if_.esp -= sizeof(void *);
-  // memcpy(if_.esp, &zero, sizeof(void *));
-  // for(int i = argc - 1; i >= 0; i--) {
-  //   if_.esp -= sizeof(void *);
-  //   memcpy(if_.esp, listPointers[i], sizeof(uint32_t));
-  // }
-  // uint32_t argv = if_.esp;
-  // if_.esp -= sizeof(void *);
-  // memcpy((void *) if_.esp, &argv, sizeof(uint32_t));
-  // if_.esp -= sizeof(void *);
-  // memcpy((void *) if_.esp, &argc, sizeof(unsigned int));
-  // if_.esp -= sizeof(void *);
-
-
-
 
 
   /* Start the user process by simulating a return from an
