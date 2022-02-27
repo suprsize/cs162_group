@@ -233,18 +233,24 @@ static void start_process(void* file_name_) {
       memcpy(if_.esp, token, _size);
 
       /* Null terminate the argv arguments just in case! */
-      memcpy(if_.esp + strlen(token), &NULL_TERMINATOR, 1);
+      // memcpy(if_.esp + strlen(token), &NULL_TERMINATOR, 1);
   }
 
+  _size = sizeof(char *) * (argc + 1);
+
+  if_.esp -= _size;
   /* stack-align, addresses are 4B */
-  if_.esp -= ((uint32_t) if_.esp) % 16;
+
+  /* We align ESP to anticipate for argc/argv alignment. */
+  if_.esp -= ((uint32_t) if_.esp - (2 * sizeof(void *))) % 16;
+
+  // memset(if_.esp, 0x0, align_size);
 
   /* Add NULL pointer sentinel according to spec */
   argv[argc] = NULL;
 
   /* Push argv pointers onto stack */
-  _size = sizeof(char *) * (argc + 1);
-  if_.esp -= _size;
+  // if_.esp -= _size;
   memcpy(if_.esp, argv, _size);
 
   uint32_t argv_addr = if_.esp;
@@ -261,7 +267,6 @@ static void start_process(void* file_name_) {
 
   /* Push fake "return address" - maintain stack frame structure */
   if_.esp -= sizeof(void *);
-
 
   /* Change the process name to get rid of the arguments. */
   strlcpy(t->pcb->process_name, &file_name_cpy, length + 1);
