@@ -2,12 +2,17 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "filesys/file.h"
 #include <stdint.h>
 
 // At most 8MB can be allocated to the stack
 // These defines will be used in Project 2: Multithreading
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
+
+
+/* Custom filesys functions. */
+int add_fd(struct file * file_descriptor);
 
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
@@ -27,7 +32,7 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
-
+  int fd_index;               /* Index of newest file descriptor. */
   struct list file_descriptors; /* File descriptor lists */
 
   /* James Begin */

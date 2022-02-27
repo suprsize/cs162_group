@@ -4,6 +4,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "threads/vaddr.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -20,38 +22,83 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    */
 
 //  printf("System call number: %d\n", args[0]);
+// TODO argument checking
 
   switch (args[0]) {
 
+    case SYS_OPEN: {
+
+      char *filename = args[1];
+      if (filename == NULL) {
+        f->eax = -1;
+        break;
+      }
+      struct file* opened_file = filesys_open(filename);
+
+      //TODO search the file descriptor table for opened_file
+      // If it's there, then we change offset to 0. Don't
+      // incremenet the file descriptor index.
+
+      f->eax = add_fd(opened_file);
+      break;
+                   }
+
+    case SYS_REMOVE: {
+      char * filename = args[1];
+      f->eax = filesys_remove(filename);
+      break;
+                     }
+                     
+
+    case SYS_CREATE: {
+      char *filename = args[1];
+      unsigned int initial_size = args[1];
+      f->eax = filesys_create(filename, initial_size);
+      break;
+                     }
+
     case SYS_PRACTICE:
-      // TODO validate arguments - We'll write a separate, generic function for this before running syscalls
       f->eax = args[1] + 1;
       break;
 
-      /**jj
-    
     case SYS_HALT:
       shutdown_power_off();
+      // not reached
 
-    case SYS_EXEC:
+    case SYS_EXEC: {
       f->eax = process_execute((char *) args[1]);
       break;
+                   }
     
-    case SYS_WAIT:
+    case SYS_WAIT: {
       f->eax = process_wait(args[1]);
       break;
+                   }
 
-
-
-      */
     case SYS_WRITE: {
       int fd = args[1];
       uint32_t* buffer = args[2];
-      // TODO valdate the buffer
       size_t count = args[3];
 
-      int retval = write_file(fd, buffer, count);
-      f->eax = retval;
+      // TODO fix this, shitty way of validaitng
+
+      uint32_t *pd = thread_current()->pcb->pagedir;
+      uint32_t *upage = pg_round_down(buffer);
+
+      if (buffer == NULL || (count < 0)) {
+        f->eax = -1;
+        break;
+      }
+      uint32_t *pagedir_of_buffer = pagedir_get_page(pd, buffer);
+
+      if ((pagedir_of_buffer == NULL) || !is_user_vaddr(buffer)
+          || !is_user_vaddr(buffer + count)) {
+        f->eax = -1;
+        break;
+      }
+
+      int bytes_written = write_file(fd, buffer, count);
+      f->eax = bytes_written;
       break;
                     }
 

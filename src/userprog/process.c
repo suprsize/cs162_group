@@ -78,6 +78,26 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
+/* Adds a file descriptor to the current process. */
+int add_fd(struct file* file_descriptor) {
+
+  /* File can't be a dummy or NULL */
+  if (file_descriptor == NULL
+      || file_descriptor->inode == NULL) {
+    return -1;
+  }
+
+  struct process* process = thread_current()->pcb;
+
+  /* Add file to file descriptor table. */
+  list_push_back(&process->file_descriptors, &file_descriptor->elem);
+
+  /* Updates the file descriptor index to the latest. */
+  process->fd_index += 1;
+
+  return process->fd_index;
+}
+
 /* Returns a file from a given fd.
  * WARNING: Does NOT handle stdin, stderr, or stdout.
  * */
@@ -172,6 +192,9 @@ static void start_process(void* file_name_) {
 
     // initialize the file descriptor table
     list_init(&(t->pcb->file_descriptors));
+
+    /* Initialize the file descriptor index to stderr. */
+    t->pcb->fd_index = 2;
   }
 
   /* Initialize interrupt frame and load executable. */
