@@ -24,24 +24,28 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 //  printf("System call number: %d\n", args[0]);
 // TODO argument checking
 
+  bool invalid_ptr = false;
   switch (args[0]) {
 
     case SYS_OPEN: {
-
       char *filename = args[1];
-      if (filename == NULL) {
-        f->eax = -1;
+      if (is_valid_ptr(filename)) {
+        struct file* opened_file = filesys_open(filename);
+        //TODO search the file descriptor table for opened_file
+        // If it's there, then we change offset to 0. Don't
+        // incremenet the file descriptor index. MOH: ACTUALLY don't need to check for double
+        // open
+        f->eax = add_fd(opened_file);
         break;
       }
-      struct file* opened_file = filesys_open(filename);
-
-      //TODO search the file descriptor table for opened_file
-      // If it's there, then we change offset to 0. Don't
-      // incremenet the file descriptor index.
-
-      f->eax = add_fd(opened_file);
+      invalid_ptr = true;
       break;
                    }
+    case SYS_FILESIZE: {
+      int fd = args[1];
+
+    }
+
 
     case SYS_REMOVE: {
       char * filename = args[1];
@@ -52,8 +56,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_CREATE: {
       char *filename = args[1];
-      unsigned int initial_size = args[1];
-      f->eax = filesys_create(filename, initial_size);
+      unsigned int initial_size = args[2];
+      if (is_valid_ptr(filename)) {
+        f->eax = filesys_create(filename, initial_size);
+        break;
+      }
+      invalid_ptr = true;
       break;
                      }
 
@@ -111,5 +119,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     default:
       break;
+  }
+
+  if (invalid_ptr) {
+    // We hit invalid buffer so the current process is killed with -1.
+    f->eax = -1;
+    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, f->eax);
+    process_exit();
   }
 }

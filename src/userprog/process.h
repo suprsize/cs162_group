@@ -10,6 +10,7 @@
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
 
+bool is_valid_ptr(void * ptr);
 
 /* Custom filesys functions. */
 int add_fd(struct file * file_descriptor);

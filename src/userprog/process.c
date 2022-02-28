@@ -1,3 +1,4 @@
+
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -19,7 +20,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "devices/input.h" 
+#include "devices/input.h"
 
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
@@ -76,6 +77,18 @@ pid_t process_execute(const char* file_name) {
   /* James End */
 
   return tid;
+}
+
+/* Checks that the PTR is a valid ptr in current userspace. */
+bool is_valid_ptr(void * ptr) {
+  uint32_t pageDir = thread_current()->pcb->pagedir;
+  if (ptr != NULL && is_user_vaddr(ptr)) {
+    bool is_valid = pagedir_get_page(pageDir, ptr) != NULL;
+    if (is_valid) {
+      return true;
+    }
+  }
+    return false;
 }
 
 /* Adds a file descriptor to the current process. */
