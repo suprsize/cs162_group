@@ -134,6 +134,38 @@ struct file* get_file(int fd) {
   return NULL;
 }
 
+/* Reads to a file descriptor from buffer count times. */
+int read_file(int fd, uint32_t* buffer, size_t count) {
+  int retval = -1;
+
+  switch (fd) {
+      //TODO need to test the stdin
+
+    case STDIN_FILENO:
+      for (unsigned int i = 0; i < count; i += 1) {
+        buffer[i] = input_getc();
+      }
+      break;
+    case STDOUT_FILENO:
+      retval = -1;
+      break;
+
+    case 2:
+      retval = -1;
+      break;
+
+    default: {
+      struct file * f = get_file(fd);
+      if (f == NULL) {
+        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
+        return -1;
+      }
+      retval = file_read(f, buffer, count);
+    }
+  }
+  return retval;
+}
+
 /* Writes to a file descriptor from buffer count times. */
 int write_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
@@ -143,7 +175,7 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
 
     case STDIN_FILENO:
       for (unsigned int i = 0; i < count; i += 1) {
-        input_putc(buffer + i * sizeof(uint8_t));
+        serial_putc(buffer[i]);
       }
       break;
     case STDOUT_FILENO:

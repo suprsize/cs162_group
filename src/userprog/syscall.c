@@ -27,6 +27,25 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   bool invalid_ptr = false;
   switch (args[0]) {
 
+
+    case SYS_CREATE: {
+      char *filename = args[1];
+      unsigned int initial_size = args[2];
+      if (is_valid_ptr(filename)) {
+        f->eax = filesys_create(filename, initial_size);
+        break;
+      }
+      invalid_ptr = true;
+      break;
+    }
+
+    case SYS_REMOVE: {
+      char * filename = args[1];
+      f->eax = filesys_remove(filename);
+      break;
+    }
+
+
     case SYS_OPEN: {
       char *filename = args[1];
       if (is_valid_ptr(filename)) {
@@ -53,34 +72,29 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     }
 
+     case SYS_READ: {
+       int fd = args[1];
+       uint32_t* buffer = args[2];
+       size_t count = args[3];
+       // TODO double check validation
+       if (count < 0) {
+         f->eax = -1;
+         break;
+       }
+       if (is_valid_ptr(buffer)) {
+         int bytes_read = read_file(fd, buffer, count);
+         f->eax = bytes_read;
+         break;
+       }
+       invalid_ptr = true;
+       break;
+     }
 
-    case SYS_REMOVE: {
-      char * filename = args[1];
-      f->eax = filesys_remove(filename);
-      break;
-                     }
-                     
-
-    case SYS_CREATE: {
-      char *filename = args[1];
-      unsigned int initial_size = args[2];
-      if (is_valid_ptr(filename)) {
-        f->eax = filesys_create(filename, initial_size);
-        break;
-      }
-      invalid_ptr = true;
-      break;
-                     }
      case SYS_WRITE: {
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
-
        // TODO double check validation
-
-       uint32_t *pd = thread_current()->pcb->pagedir;
-       uint32_t *upage = pg_round_down(buffer);
-
        if (count < 0) {
          f->eax = -1;
          break;
@@ -91,6 +105,42 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
          break;
        }
        invalid_ptr = true;
+       break;
+     }
+
+     case SYS_SEEK: {
+       int fd = args[1];
+       unsigned int position = args[2];
+       struct file* file = get_file(fd);
+       if (file != NULL) {
+         file_seek(file, position);
+         break;
+       }
+       invalid_ptr = true; //TODO change to a better name maybe
+       break;
+     }
+
+     case SYS_TELL: {
+       int fd = args[1];
+       struct file* file = get_file(fd);
+       if (file != NULL) {
+         f->eax = file_tell(file);
+         break;
+       }
+       invalid_ptr = true; //TODO change to a better name maybe
+       break;
+     }
+
+     case SYS_CLOSE: {
+       int fd = args[1];
+       struct file* file = get_file(fd);
+       if (file != NULL) {
+         //TODO need to make sure that we can distingush between closed and unclosed.
+         file_close(file);
+         break;
+       }
+       invalid_ptr = true; //TODO change to a better name maybe
+       break;
      }
 
     case SYS_PRACTICE:
@@ -110,8 +160,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = process_wait(args[1]);
       break;
                    }
-
-
 
     case SYS_EXIT: {
       f->eax = args[1];

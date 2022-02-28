@@ -11,8 +11,9 @@
 #define MAX_THREADS 127
 
 bool is_valid_ptr(void * ptr);
-
 struct file* get_file(int fd);
+int read_file(int fd, uint32_t* buffer, size_t count);
+int write_file(int fd, uint32_t* buffer, size_t count);
 
 
 /* Custom filesys functions. */
@@ -49,8 +50,6 @@ struct process {
 };
 
 void userprog_init(void);
-
-int write_file(int fd, uint32_t* buffer, size_t count);
 
 
 /* Provides an interface for the parent process to keep
