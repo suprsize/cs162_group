@@ -12,6 +12,9 @@
 
 bool is_valid_ptr(void * ptr);
 
+struct file* get_file(int fd);
+
+
 /* Custom filesys functions. */
 int add_fd(struct file * file_descriptor);
 

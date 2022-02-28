@@ -112,39 +112,24 @@ int add_fd(struct file* file_descriptor) {
 }
 
 /* Returns a file from a given fd.
- * WARNING: Does NOT handle stdin, stderr, or stdout.
+ * If file descriptor didn't exist, has been closed or
+ * stdin, stderr, or stdout were passed in will return NULL
  * */
-static struct file* get_file(int fd) {
+struct file* get_file(int fd) {
   struct process* process = thread_current()->pcb;
   struct list_elem *e;
   struct list* fd_table = &(process->file_descriptors);
-
-  /* Suggestion */
-
-  // switch (fd) {
-  //   case 0:
-  //     // Handle STDOUT
-  //     break;
-  //   case 1:
-  //     // Handle STDIN
-  //     break;
-  //   case 2:
-  //     // Handle STDERR
-  //     break;
-  //   default:
-  //     // iterate through for loop as done below
-  // }
-
-  // However, I think they want us to use inodes with the functions they've given us..
-
   if (fd < 3)
     return NULL;
 
   int i = 3;
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    if (i++ == fd) // i++ increments _after_ evaluating
-      return list_entry(e, struct file, elem);
-    // i += 1;
+    if (i++ == fd) { // i++ increments _after_ evaluating
+      struct file* f = list_entry(e, struct file, elem);
+      if (f->inode != NULL) // checks that the file descriptor is not closed.
+          return f;
+      return NULL;
+    }
   }
   return NULL;
 }
@@ -152,29 +137,31 @@ static struct file* get_file(int fd) {
 /* Writes to a file descriptor from buffer count times. */
 int write_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
+
   switch (fd) {
+      //TODO need to test the stdin
 
     case STDIN_FILENO:
       for (unsigned int i = 0; i < count; i += 1) {
-        input_putc(buffer[i]);
+        input_putc(buffer + i * sizeof(uint8_t));
       }
       break;
-
     case STDOUT_FILENO:
       putbuf((char *) buffer, count);
       retval = count;
       break;
 
     case 2:
+      //TODO IMPLEMENT STDERR
       break;
 
     default: {
       struct file * f = get_file(fd);
       if (f == NULL) {
-        break;
+        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
+        return -1;
       }
-      retval = file_write(f, buffer, count);//, f->pos);
-      f->pos += retval;
+      retval = file_write(f, buffer, count);
    }
   }
   return retval;

@@ -41,9 +41,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       invalid_ptr = true;
       break;
                    }
+
     case SYS_FILESIZE: {
       int fd = args[1];
-
+      struct file* file = get_file(fd);
+      if (file != NULL) {
+        f->eax = file_length(file);
+        break;
+      }
+      invalid_ptr = true; //TODO change to a better name maybe
+      break;
     }
 
 
@@ -64,6 +71,27 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       invalid_ptr = true;
       break;
                      }
+     case SYS_WRITE: {
+       int fd = args[1];
+       uint32_t* buffer = args[2];
+       size_t count = args[3];
+
+       // TODO double check validation
+
+       uint32_t *pd = thread_current()->pcb->pagedir;
+       uint32_t *upage = pg_round_down(buffer);
+
+       if (count < 0) {
+         f->eax = -1;
+         break;
+       }
+       if (is_valid_ptr(buffer)) {
+         int bytes_written = write_file(fd, buffer, count);
+         f->eax = bytes_written;
+         break;
+       }
+       invalid_ptr = true;
+     }
 
     case SYS_PRACTICE:
       f->eax = args[1] + 1;
@@ -77,38 +105,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = process_execute((char *) args[1]);
       break;
                    }
-    
+
     case SYS_WAIT: {
       f->eax = process_wait(args[1]);
       break;
                    }
 
-    case SYS_WRITE: {
-      int fd = args[1];
-      uint32_t* buffer = args[2];
-      size_t count = args[3];
 
-      // TODO fix this, shitty way of validaitng
-
-      uint32_t *pd = thread_current()->pcb->pagedir;
-      uint32_t *upage = pg_round_down(buffer);
-
-      if (buffer == NULL || (count < 0)) {
-        f->eax = -1;
-        break;
-      }
-      uint32_t *pagedir_of_buffer = pagedir_get_page(pd, buffer);
-
-      if ((pagedir_of_buffer == NULL) || !is_user_vaddr(buffer)
-          || !is_user_vaddr(buffer + count)) {
-        f->eax = -1;
-        break;
-      }
-
-      int bytes_written = write_file(fd, buffer, count);
-      f->eax = bytes_written;
-      break;
-                    }
 
     case SYS_EXIT: {
       f->eax = args[1];
