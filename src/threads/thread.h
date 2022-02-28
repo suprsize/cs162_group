@@ -96,6 +96,8 @@ struct thread {
 #ifdef USERPROG
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */
+  struct semaphore pcb_ready; /* Indicates to waiting process when PCB is initialized. */
+
 #endif
 
   /* Owned by thread.c. */
@@ -131,6 +133,8 @@ void thread_block(void);
 void thread_unblock(struct thread*);
 
 struct thread* thread_current(void);
+/* to retreieve a thread given TID. */
+struct thread* thread_get(tid_t tid);
 tid_t thread_tid(void);
 const char* thread_name(void);
 

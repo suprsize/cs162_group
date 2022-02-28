@@ -25,6 +25,59 @@ static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 
+/* Generates a retval struct so procs can read/write exit
+ * codes in a synchronized manner.*/
+struct retval* generate_retval() {
+  struct retval* _retval;
+
+  _retval = malloc(sizeof(struct retval));
+
+  if (_retval == NULL) {
+    return NULL;
+  }
+
+  _retval->value = -1;
+  _retval->ref_cnt = 0;
+
+  sema_init(&(_retval->wait_sema), 0);
+  lock_init(&(_retval->ref_cnt_lock));
+
+  return _retval;
+}
+
+/* Populates a given process control block with 
+ * the default values. Returns true on a success. */
+bool populate_pcb(struct process* pcb) {
+  struct thread* t;
+
+  if (pcb == NULL) {
+    return false;
+  }
+
+  t = thread_current();
+
+  pcb->pagedir = NULL;
+
+  /* fd codes 0 to 2 are reserved. */
+  pcb->fd_index = 2;
+  pcb->main_thread = t;
+
+  // TODO free everything below on exit.
+
+  /* generate a pointer to the PCB's retval struct. */
+  pcb->retval = generate_retval();
+
+  /* copies thread name to process name and ensures a NULL terminator. */
+  strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+  *(t->pcb->process_name + sizeof(t->name)) = NULL;
+
+  /* Initializes the list of file descriptors and children retvals. */
+  list_init(&(pcb->file_descriptors));
+  list_init(&(pcb->children));
+
+  return true;
+}
+
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
@@ -39,11 +92,12 @@ void userprog_init(void) {
      page directory) when t->pcb is assigned, because a timer interrupt
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
-  success = t->pcb != NULL;
+  success = populate_pcb(t->pcb);
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
 }
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -52,8 +106,14 @@ void userprog_init(void) {
 pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
+  struct thread* child_thread;
+  struct process* child_pcb;
+  struct process* current_pcb;
+  struct retval* child_retval;
+
 
   sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+  current_pcb = thread_current()->pcb;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -67,13 +127,46 @@ pid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
+  /** 
+   * TODO erase this for project submission
+   * Explanation on wtf is going on down below
+   *
+   * We need to wait for child to initialize the PCB. We wait
+   * by using the semaphore child_thread->pcb_ready.
+   *
+   * Once the PCB is initialized, we access the child's retval struct
+   * for two reasons:
+   *
+   * 1) Wait for the status of the load() function in start_process.
+   * 2) Add the child retval struct to the parent's children list.
+   */
 
+  child_thread = thread_get(tid);
 
-  /* James Begin */
+  /* Wait until child has created the PCB with its
+   * retval struct. */
+  sema_down(&(child_thread->pcb_ready));
+  child_pcb = child_thread->pcb;
 
-  /* Keep track of children processes */
+  // Neccesary.
+  // there is a chance that PCB allocation fails.
+  if (child_pcb == NULL)  {
+    return tid;
+  }
 
-  /* James End */
+  child_retval = child_pcb->retval;
+
+  /* Ensure that LOAD has correctly worked. */
+  sema_down(&(child_retval->wait_sema));
+  bool success_rv = child_retval->value;
+
+  /* Load fails */
+  if (!success_rv) {
+    return -1;
+  }
+  
+  /* Push the child retval struct into current PCB's children list. */
+  list_push_back(&current_pcb->children, &child_retval->elem);
 
   return tid;
 }
@@ -169,36 +262,24 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+static void start_process(void* args) {
+  char* file_name = (char*)(args);
+  struct retval* retval = (args + strlen(file_name) + 2);
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
 
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
-  success = pcb_success = new_pcb != NULL;
+  t->pcb = new_pcb;
 
   /* Initialize process control block */
-  if (success) {
-    // Ensure that timer_interrupt() -> schedule() -> process_activate()
-    // does not try to activate our uninitialized pagedir
-    new_pcb->pagedir = NULL;
-    t->pcb = new_pcb;
+  success = populate_pcb(new_pcb);
 
-    // Continue initializing the PCB as normal
-    t->pcb->main_thread = t;
-    strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-
-    // initialize the file descriptor table
-    list_init(&(t->pcb->file_descriptors));
-
-    /* Initialize the file descriptor index to stderr. */
-    t->pcb->fd_index = 2;
-  }
+  /* Indicate to parent thread that PCB is ready.*/
+  sema_up(&(t->pcb_ready));
 
   /* Initialize interrupt frame and load executable. */
-
   int length = strcspn(file_name, " ");
   char file_name_cpy[length + 1];
 
@@ -212,6 +293,11 @@ static void start_process(void* file_name_) {
     memcpy(file_name_cpy, file_name, length);
     file_name_cpy[length] = NULL;
     success = load(file_name_cpy, &if_.eip, &if_.esp);
+
+    /* Indicate to the parent proc that we loaded
+     * the program successfully. */
+    t->pcb->retval->value = success;
+    sema_up(&(t->pcb->retval->wait_sema));
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -221,9 +307,11 @@ static void start_process(void* file_name_) {
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
+
+    /* Indicate to parent that the PCB is fucked */
+    sema_up(& (t->pcb_ready));
     free(pcb_to_free);
   }
-
 
   /* James' Suggestion Begin */
 
@@ -250,8 +338,6 @@ static void start_process(void* file_name_) {
       /* Store address of token in argument addresses */
       argv[argc++] = if_.esp;
 
-      // TODO page fault occurs here
-      // TODO is the if_.esp working
       /* Copy token to user stack */
       memcpy(if_.esp, token, _size);
 
@@ -300,7 +386,6 @@ static void start_process(void* file_name_) {
     sema_up(&temporary);
     thread_exit();
   }
-
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
