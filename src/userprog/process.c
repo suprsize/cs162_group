@@ -37,7 +37,11 @@ struct retval* generate_retval() {
   }
 
   _retval->value = -1;
-  _retval->ref_cnt = 0;
+
+  // the parent references this in the children list.
+  // the child references this in the PCb. 
+  // If this is the main proc (first process), change this to 1.
+  _retval->ref_cnt = 2;
 
   sema_init(&(_retval->wait_sema), 0);
   lock_init(&(_retval->ref_cnt_lock));
@@ -96,6 +100,9 @@ void userprog_init(void) {
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
+
+  /* There is no parent of the init process. Retval of this is only referneced by me. */
+  t->pcb->retval->ref_cnt = 1;
 }
 
 
@@ -313,6 +320,8 @@ static void start_process(void* args) {
     free(pcb_to_free);
   }
 
+  //TODO COPY FILE DESCRIPTORS OVER FROM PARENT TO CHID
+  //
   /* James' Suggestion Begin */
 
   /* For tokenization later... */
@@ -425,8 +434,10 @@ int process_wait(pid_t child_pid UNUSED) {
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int exit_code) {
   struct thread* cur = thread_current();
+  struct retval* proc_retval = cur->pcb->retval;
+  struct list* children_retvals;
   uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
@@ -437,23 +448,48 @@ void process_exit(void) {
 
   // TODO: free the file descriptor table
   // remove the elements from the fd list
-
-
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
     // free(list_entry(e, struct file, elem));
   }
 
-  /* TODO: "If pid did not call exit but was terminated by the kernel
-    (e.g. killed due to an exception), wait must return -1" 
-    
-    While you can’t rely on the SYS_EXIT syscall, you can rely on every
-    process eventually ending up in the process_exit function. */
+  /* Synchornization with retval structs*/
 
-  /* Suggestion: child_retval = -1 on exit, so parent->child_pid->retval = -1 */
+  /* Store exit code into retval struct. */
+  proc_retval->value = exit_code;
 
-  /* James End */
+  /* Notify the parent of the waiting process. */
+  sema_up(&(proc_retval->wait_sema));
 
+  lock_acquire(&(proc_retval->ref_cnt_lock));
+  proc_retval->ref_cnt -= 1;
+
+  /* Free the retval struct if no one is waiting. */
+  if (proc_retval->ref_cnt <= 0) {
+    free(proc_retval);
+  } else {
+    lock_release(&(proc_retval->ref_cnt_lock));
+  }
+
+  /* Decrease ref count of all children retvals.
+   * Free if neccesary. */
+
+  // TODO is this how we free a list ?
+  struct list_elem* e;
+  children_retvals = &(cur->pcb->children);
+  for (e = list_begin(children_retvals); e != list_end(children_retvals);
+      e = list_next(e)) {
+    struct retval* _retval = list_entry(e, struct retval, elem);
+
+    lock_acquire(&(_retval->ref_cnt_lock));
+    _retval->ref_cnt -= 1;
+
+    if (_retval->ref_cnt <= 0) {
+      free(_retval);
+    } else {
+      lock_release(&(_retval->ref_cnt_lock));
+    }
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
