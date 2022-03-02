@@ -31,6 +31,71 @@ static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 
+/* Generates a retval struct so procs can read/write exit
+ * codes in a synchronized manner.*/
+struct retval* generate_retval() {
+  struct retval* _retval;
+
+  _retval = malloc(sizeof(struct retval));
+
+  if (_retval == NULL) {
+    return NULL;
+  }
+
+  _retval->value = -1;
+  _retval->tid = thread_current()->tid;
+
+  // the parent references this in the children list.
+  // the child references this in the PCb. 
+  // If this is the main proc (first process), change this to 1.
+  _retval->ref_cnt = 2;
+
+  sema_init(&(_retval->wait_sema), 0);
+  lock_init(&(_retval->ref_cnt_lock));
+
+  return _retval;
+}
+
+/* Populates a given process control block with 
+ * the default values. Returns true on a success. */
+bool populate_pcb(struct process* pcb) {
+  struct thread* t;
+
+  if (pcb == NULL) {
+    return false;
+  }
+
+  t = thread_current();
+
+  pcb->pagedir = NULL;
+
+  /* fd codes 0 to 2 are reserved. */
+  pcb->main_thread = t;
+
+  // initialize the file descriptor table
+  list_init(&(t->pcb->file_descriptors));
+
+  // initialize the global lock of filesys calls
+  lock_init(&t->pcb->filesys_lock);
+
+  pcb->fd_index = 2;
+
+  // TODO free everything below on exit.
+
+  /* generate a pointer to the PCB's retval struct. */
+  pcb->retval = generate_retval();
+
+  /* copies thread name to process name and ensures a NULL terminator. */
+  strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+  *(t->pcb->process_name + sizeof(t->name)) = NULL;
+
+  /* Initializes the list of file descriptors and children retvals. */
+  list_init(&(pcb->file_descriptors));
+  list_init(&(pcb->children));
+
+  return true;
+}
+
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
@@ -45,11 +110,15 @@ void userprog_init(void) {
      page directory) when t->pcb is assigned, because a timer interrupt
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
-  success = t->pcb != NULL;
+  success = populate_pcb(t->pcb);
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
+
+  /* There is no parent of the init process. Retval of this is only referneced by me. */
+  t->pcb->retval->ref_cnt = 1;
 }
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -58,8 +127,14 @@ void userprog_init(void) {
 pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
+  struct thread* child_thread;
+  struct process* child_pcb;
+  struct process* current_pcb;
+  struct retval* child_retval;
 
-  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+
+//  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+  current_pcb = thread_current()->pcb;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -73,23 +148,52 @@ pid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
+  /** 
+   * TODO erase this for project submission
+   * Explanation on wtf is going on down below
+   *
+   * We need to wait for child to initialize the PCB. We wait
+   * by using the semaphore child_thread->pcb_ready.
+   *
+   * Once the PCB is initialized, we access the child's retval struct
+   * for two reasons:
+   *
+   * 1) Wait for the status of the load() function in start_process.
+   * 2) Add the child retval struct to the parent's children list.
+   */
 
+  child_thread = thread_get(tid);
 
-  /* James Begin */
+  /* Wait until child has created the PCB with its
+   * retval struct. */
+  sema_down(&(child_thread->pcb_ready));
+  child_pcb = child_thread->pcb;
 
-  /* Keep track of children processes */
+  // Neccesary.
+  // there is a chance that PCB allocation fails.
+  if (child_pcb == NULL)  {
+    return tid;
+  }
 
-  /* James End */
+  child_retval = child_pcb->retval;
+
+  /* Ensure that LOAD has correctly worked. */
+  sema_down(&(child_retval->wait_sema));
+  bool success_rv = child_retval->value;
+
+  /* Load fails */
+  if (!success_rv) {
+    return -1;
+  }
+  
+  /* Push the child retval struct into current PCB's children list. */
+  list_push_back(&current_pcb->children, &child_retval->elem);
 
   return tid;
 }
 
 void init_fd_table() {
   struct thread* t = thread_current();
-  // initialize the file descriptor table
-  list_init(&(t->pcb->file_descriptors));
-  // initialize the global lock of filesys calls
-  lock_init(&t->pcb->filesys_lock);
   /* Initialize the file descriptor index to stderr. */
   t->pcb->fd_index = 2;
 }
@@ -231,33 +335,24 @@ void close_file(int fd) {
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+static void start_process(void* args) {
+  char* file_name = (char*)(args);
+  struct retval* retval = (args + strlen(file_name) + 2);
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
 
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
-  success = pcb_success = new_pcb != NULL;
+  t->pcb = new_pcb;
 
   /* Initialize process control block */
-  if (success) {
-    // Ensure that timer_interrupt() -> schedule() -> process_activate()
-    // does not try to activate our uninitialized pagedir
-    new_pcb->pagedir = NULL;
-    t->pcb = new_pcb;
+  success = populate_pcb(new_pcb);
 
-    // Continue initializing the PCB as normal
-    t->pcb->main_thread = t;
-    strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-
-    // Initialize the file descriptor table and it's related variables
-    init_fd_table();
-  }
+  /* Indicate to parent thread that PCB is ready.*/
+  sema_up(&(t->pcb_ready));
 
   /* Initialize interrupt frame and load executable. */
-
   int length = strcspn(file_name, " ");
   char file_name_cpy[length + 1];
 
@@ -271,6 +366,11 @@ static void start_process(void* file_name_) {
     memcpy(file_name_cpy, file_name, length);
     file_name_cpy[length] = NULL;
     success = load(file_name_cpy, &if_.eip, &if_.esp);
+
+    /* Indicate to the parent proc that we loaded
+     * the program successfully. */
+    t->pcb->retval->value = success;
+    sema_up(&(t->pcb->retval->wait_sema));
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -280,10 +380,14 @@ static void start_process(void* file_name_) {
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
+
+    /* Indicate to parent that the PCB is fucked */
+    sema_up(& (t->pcb_ready));
     free(pcb_to_free);
   }
 
-
+  //TODO COPY FILE DESCRIPTORS OVER FROM PARENT TO CHID
+  //
   /* James' Suggestion Begin */
 
   /* For tokenization later... */
@@ -309,8 +413,6 @@ static void start_process(void* file_name_) {
       /* Store address of token in argument addresses */
       argv[argc++] = if_.esp;
 
-      // TODO page fault occurs here
-      // TODO is the if_.esp working
       /* Copy token to user stack */
       memcpy(if_.esp, token, _size);
 
@@ -356,10 +458,9 @@ static void start_process(void* file_name_) {
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
-    sema_up(&temporary);
+    // sema_up(&temporary);
     thread_exit();
   }
-
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -380,27 +481,64 @@ static void start_process(void* file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
+int process_wait(pid_t child_pid) {
+  struct list* children;
+  struct retval* child_retval = NULL;
+  int return_value = -1;
+  //sema_down(&temporary);
 
-  /* James Begin */
+  children = &(thread_current()->pcb->children);
 
-  /* sema_down(&temporary); temporary is placeholder */
+  /* Find the child process retval. */
+  struct list_elem* e;
+  for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
+    struct retval* _retval = list_entry(e, struct retval, elem);
 
-  /* Suggestion: child_retval, sema_down(&wait_sema); */
+    // TODO are TID and PID the same? userprog.pdf has a thing
+    // on this but not sure...
+    if (_retval->tid == child_pid) {
+      child_retval = _retval;
+    }
+  }
 
-  /* run_task in threads/init.c still needs to work correctly
-   after you implement those syscalls, so you probably want to 
-   modify that as well. */
+  /* Not a valid PID */
+  if (child_retval == NULL) {
+    return return_value;
+  }
 
-  /* James End */
+  /* Non-blocking tries to acquire the lock to ensure that 
+   * we only wait() once. */
+  if (lock_held_by_current_thread(&(child_retval->wait_lock))
+      || !lock_try_acquire(&(child_retval->wait_lock))) {
+    return return_value;
+  }
 
-  return 0;
+
+  /* Begin wait for the exit code. */
+  sema_down(&(child_retval->wait_sema));
+
+  return_value = child_retval->value;
+
+  lock_acquire(&(child_retval->ref_cnt_lock));
+  child_retval->ref_cnt -= 1;
+
+  /* Remove the retval from the parent. */
+  list_remove(&(child_retval->elem));
+
+  if (child_retval->ref_cnt <= 0) {
+    free(child_retval);
+  } else {
+    lock_release(&(child_retval->ref_cnt_lock));
+  }
+
+  return return_value;
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int exit_code) {
   struct thread* cur = thread_current();
+  struct retval* proc_retval = cur->pcb->retval;
+  struct list* children_retvals;
   uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
@@ -411,23 +549,48 @@ void process_exit(void) {
 
   // TODO: free the file descriptor table
   // remove the elements from the fd list
-
-
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
     // free(list_entry(e, struct file, elem));
   }
 
-  /* TODO: "If pid did not call exit but was terminated by the kernel
-    (e.g. killed due to an exception), wait must return -1" 
-    
-    While you can’t rely on the SYS_EXIT syscall, you can rely on every
-    process eventually ending up in the process_exit function. */
+  /* Synchornization with retval structs*/
 
-  /* Suggestion: child_retval = -1 on exit, so parent->child_pid->retval = -1 */
+  /* Store exit code into retval struct. */
+  proc_retval->value = exit_code;
 
-  /* James End */
+  /* Notify the parent of the waiting process. */
+  sema_up(&(proc_retval->wait_sema));
 
+  lock_acquire(&(proc_retval->ref_cnt_lock));
+  proc_retval->ref_cnt -= 1;
+
+  /* Free the retval struct if no one is waiting. */
+  if (proc_retval->ref_cnt <= 0) {
+    free(proc_retval);
+  } else {
+    lock_release(&(proc_retval->ref_cnt_lock));
+  }
+
+  /* Decrease ref count of all children retvals.
+   * Free if neccesary. */
+
+  // TODO is this how we free a list ?
+  struct list_elem* e;
+  children_retvals = &(cur->pcb->children);
+  for (e = list_begin(children_retvals); e != list_end(children_retvals);
+      e = list_next(e)) {
+    struct retval* _retval = list_entry(e, struct retval, elem);
+
+    lock_acquire(&(_retval->ref_cnt_lock));
+    _retval->ref_cnt -= 1;
+
+    if (_retval->ref_cnt <= 0) {
+      free(_retval);
+    } else {
+      lock_release(&(_retval->ref_cnt_lock));
+    }
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -453,7 +616,7 @@ void process_exit(void) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary); // TODO: Need to replace temporary - James
+//  sema_up(&temporary); // TODO: Need to replace temporary - James
   thread_exit();
 }
 

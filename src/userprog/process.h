@@ -28,6 +28,23 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
+/* Provides an interface for the parent process to keep
+ * track of the return status code of the child proc. 
+ */
+struct retval {
+  struct lock wait_lock; /* Used to ensure that the parent waits only once. */
+  bool has_been_called;
+  tid_t tid; /* The thread ID this struct is refering to. */
+
+  int ref_cnt;  /* Determines how many procs are accessing this resource. */
+  int value; /* The return status code. */
+  struct semaphore wait_sema; /* semaphore to wait for return code. */
+  struct lock ref_cnt_lock; /* Lock for ref count. */
+
+  struct list_elem elem; /* List element so parent can keep track of stuff. */
+};
+
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -41,34 +58,18 @@ struct process {
   int fd_index;               /* Index of newest file descriptor. */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
-  /* James Begin */
 
   struct list children; /* Keep track of children processes and their respective retvals */
-  // struct child_retval child_rv;
-
-  /* James End */
-
+  struct retval* retval; /* Return value structure where we store our exit codes. */
 };
 
 void userprog_init(void);
 
-
-/* Provides an interface for the parent process to keep
- * track of the return status code of the child proc. 
- */
-struct child_retval {
-  bool has_been_locked; /* used to ensure no other proccess is using it. */
-  bool has_been_called;
-
-  int ref_cnt;  /* Determines how many procs are accessing this resource. */
-  int retval; /* The return status code. */
-  struct semaphore* wait_sema; /* semaphore to wait for return code. */
-  struct lock* ref_cnt_lock; /* Lock for ref count. */
-};
+int write_file(int fd, uint32_t* buffer, size_t count);
 
 pid_t process_execute(const char* file_name);
 int process_wait(pid_t);
-void process_exit(void);
+void process_exit(int exit_code);
 void process_activate(void);
 
 bool is_main_thread(struct thread*, struct process*);

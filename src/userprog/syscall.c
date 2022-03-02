@@ -200,7 +200,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXIT: {
       f->eax = args[1];
       printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-      process_exit();
+      process_exit(args[1]);
       break;
                    }
 
@@ -212,6 +212,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     // We hit invalid buffer so the current process is killed with -1.
     f->eax = -1;
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, f->eax);
-    process_exit();
+    process_exit(-1);
   }
 }
