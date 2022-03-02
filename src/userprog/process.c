@@ -22,6 +22,11 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 
+struct myFile {
+  struct file* file_ptr;
+  struct list_elem elem;
+};
+
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
@@ -92,23 +97,41 @@ bool is_valid_ptr(void * ptr) {
 }
 
 /* Adds a file descriptor to the current process. */
-int add_fd(struct file* file_descriptor) {
+int add_fd(struct file* theFile) {
 
   /* File can't be a dummy or NULL */
-  if (file_descriptor == NULL
-      || file_descriptor->inode == NULL) {
+  if (theFile == NULL
+      || theFile->inode == NULL) {
     return -1;
   }
 
   struct process* process = thread_current()->pcb;
-
+  struct myFile* newFile = (struct myFile*) malloc(sizeof (struct myFile));
+  newFile->file_ptr = theFile;
   /* Add file to file descriptor table. */
-  list_push_back(&process->file_descriptors, &file_descriptor->elem);
+  list_push_back(&process->file_descriptors, &newFile->elem);
 
   /* Updates the file descriptor index to the latest. */
   process->fd_index += 1;
-
   return process->fd_index;
+}
+
+struct myFile* get_myFile(int fd) {
+  struct process* process = thread_current()->pcb;
+  struct list_elem *e;
+  struct list* fd_table = &(process->file_descriptors);
+  if (fd < 3)
+    return NULL; // file is stdin or stdout or stderr.
+  int i = 3;
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    if (i++ == fd) { // i++ increments _after_ evaluating
+      struct myFile* f = list_entry(e, struct myFile, elem);
+      if (f->file_ptr != NULL) // checks that the file descriptor is not closed.
+        return f;
+      return NULL; // file is closed.
+    }
+  }
+  return NULL; // no such fd exist in the file descriptor table.
 }
 
 /* Returns a file from a given fd.
@@ -116,21 +139,9 @@ int add_fd(struct file* file_descriptor) {
  * stdin, stderr, or stdout were passed in will return NULL
  * */
 struct file* get_file(int fd) {
-  struct process* process = thread_current()->pcb;
-  struct list_elem *e;
-  struct list* fd_table = &(process->file_descriptors);
-  if (fd < 3)
-    return NULL;
-
-  int i = 3;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    if (i++ == fd) { // i++ increments _after_ evaluating
-      struct file* f = list_entry(e, struct file, elem);
-      if (f->inode != NULL) // checks that the file descriptor is not closed.
-          return f;
-      return NULL;
-    }
-  }
+  struct myFile* f = get_myFile(fd);
+  if (f != NULL) //checks that the file descriptor is not closed or stdin, stdout, stderr.
+    return f->file_ptr;
   return NULL;
 }
 
@@ -197,6 +208,19 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
    }
   }
   return retval;
+}
+
+void close_file(int fd) {
+  //TODO don't know if we have to error if fd was <3 or already closed.
+
+  struct myFile* f = get_myFile(fd);
+  if (f != NULL) {
+    if (f->file_ptr != NULL) {
+      file_close(f->file_ptr);
+      // To indicate that the file descriptor has been close.
+      f->file_ptr = NULL;
+    }
+  }
 }
 
 /* A thread function that loads a user process and starts it

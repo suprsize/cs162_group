@@ -40,8 +40,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_REMOVE: {
+      //TODO might have to do some checking about what is being removed.
       char * filename = args[1];
-      f->eax = filesys_remove(filename);
+      if (is_valid_ptr(filename)) {
+        f->eax = filesys_remove(filename);
+        break;
+      }
+      invalid_ptr = true;
       break;
     }
 
@@ -50,10 +55,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       char *filename = args[1];
       if (is_valid_ptr(filename)) {
         struct file* opened_file = filesys_open(filename);
-        //TODO search the file descriptor table for opened_file
-        // If it's there, then we change offset to 0. Don't
-        // incremenet the file descriptor index. MOH: ACTUALLY don't need to check for double
-        // open
         f->eax = add_fd(opened_file);
         break;
       }
@@ -133,13 +134,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
      case SYS_CLOSE: {
        int fd = args[1];
-       struct file* file = get_file(fd);
-       if (file != NULL) {
-         //TODO need to make sure that we can distingush between closed and unclosed.
-         file_close(file);
-         break;
-       }
-       invalid_ptr = true; //TODO change to a better name maybe
+       //TODO WE ARE HAVE TO FREEING THE FD TABLE WHEN PROCESS CLOSES.
+       close_file(fd);
+       invalid_ptr = false; //TODO might have to do some error checking
        break;
      }
 
