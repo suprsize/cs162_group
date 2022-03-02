@@ -193,9 +193,7 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       //TODO need to test the stdin
 
     case STDIN_FILENO:
-      for (size_t i = 0; i < count; i += 1) {
-        serial_putc(buffer[i]);
-      }
+      retval = -1;
       break;
     case STDOUT_FILENO:
       putbuf((char *) buffer, count);
