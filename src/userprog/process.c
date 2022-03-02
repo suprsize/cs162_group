@@ -197,16 +197,37 @@ void init_fd_table() {
   /* Initialize the file descriptor index to stderr. */
   t->pcb->fd_index = 2;
 }
+
+/* Checks that pointer to arguments are ok. */
+bool is_valid_args(void* stack_ptr, int argc) {
+  int i;
+  for (i = 0; i < argc; i += 1) {
+    if (!is_valid_ptr(stack_ptr + i * sizeof(void*))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+
 /* Checks that the PTR is a valid ptr in current userspace. */
 bool is_valid_ptr(void * ptr) {
   uint32_t pageDir = thread_current()->pcb->pagedir;
   if (ptr != NULL && is_user_vaddr(ptr)) {
     bool is_valid = pagedir_get_page(pageDir, ptr) != NULL;
-    if (is_valid) {
-      return true;
+    if (!is_valid) {
+      return false;
     }
   }
-    return false;
+
+  ptr = ptr + sizeof(void *) - 1;
+  if (is_user_vaddr(ptr)) {
+    bool is_valid = pagedir_get_page(pageDir, ptr) != NULL;
+    if (!is_valid) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /* Adds a file descriptor to the current process. */
@@ -347,7 +368,7 @@ static void start_process(void* args) {
   t->pcb = new_pcb;
 
   /* Initialize process control block */
-  success = populate_pcb(new_pcb);
+  success = pcb_success = populate_pcb(new_pcb);
 
   /* Indicate to parent thread that PCB is ready.*/
   sema_up(&(t->pcb_ready));
@@ -384,6 +405,7 @@ static void start_process(void* args) {
     /* Indicate to parent that the PCB is fucked */
     sema_up(& (t->pcb_ready));
     free(pcb_to_free);
+    return;
   }
 
   //TODO COPY FILE DESCRIPTORS OVER FROM PARENT TO CHID

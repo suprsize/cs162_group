@@ -12,6 +12,7 @@
 #define MAX_THREADS 127
 
 bool is_valid_ptr(void * ptr);
+bool is_valid_args(void* stack_ptr, int argc);
 struct file* get_file(int fd);
 int read_file(int fd, uint32_t* buffer, size_t count);
 int write_file(int fd, uint32_t* buffer, size_t count);

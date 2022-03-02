@@ -24,8 +24,15 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 //  printf("System call number: %d\n", args[0]);
 // TODO argument checking
 
-  bool invalid_ptr = false;
+  bool invalid_ptr = !is_valid_ptr(args);
   struct lock* file_lock = &thread_current()->pcb->filesys_lock;
+
+  // Stack pointer is invalid.
+  if (invalid_ptr) {
+    f->eax = -1;
+    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, f->eax);
+    process_exit(-1);
+  }
 
   switch (args[0]) {
 
@@ -188,6 +195,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       // not reached
 
     case SYS_EXEC: {
+      if (!is_valid_args(args, 2)
+          || !is_valid_ptr(args[1])) {
+        invalid_ptr = true;
+        break;
+      }
+
       f->eax = process_execute((char *) args[1]);
       break;
                    }
