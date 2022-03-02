@@ -84,6 +84,15 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
+void init_fd_table() {
+  struct thread* t = thread_current();
+  // initialize the file descriptor table
+  list_init(&(t->pcb->file_descriptors));
+  // initialize the global lock of filesys calls
+  lock_init(&t->pcb->filesys_lock);
+  /* Initialize the file descriptor index to stderr. */
+  t->pcb->fd_index = 2;
+}
 /* Checks that the PTR is a valid ptr in current userspace. */
 bool is_valid_ptr(void * ptr) {
   uint32_t pageDir = thread_current()->pcb->pagedir;
@@ -98,7 +107,6 @@ bool is_valid_ptr(void * ptr) {
 
 /* Adds a file descriptor to the current process. */
 int add_fd(struct file* theFile) {
-
   /* File can't be a dummy or NULL */
   if (theFile == NULL
       || theFile->inode == NULL) {
@@ -185,7 +193,7 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       //TODO need to test the stdin
 
     case STDIN_FILENO:
-      for (unsigned int i = 0; i < count; i += 1) {
+      for (size_t i = 0; i < count; i += 1) {
         serial_putc(buffer[i]);
       }
       break;
@@ -246,11 +254,8 @@ static void start_process(void* file_name_) {
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
 
-    // initialize the file descriptor table
-    list_init(&(t->pcb->file_descriptors));
-
-    /* Initialize the file descriptor index to stderr. */
-    t->pcb->fd_index = 2;
+    // Initialize the file descriptor table and it's related variables
+    init_fd_table();
   }
 
   /* Initialize interrupt frame and load executable. */

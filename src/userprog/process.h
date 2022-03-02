@@ -5,6 +5,7 @@
 #include "filesys/file.h"
 #include <stdint.h>
 
+
 // At most 8MB can be allocated to the stack
 // These defines will be used in Project 2: Multithreading
 #define MAX_STACK_PAGES (1 << 11)
@@ -39,7 +40,7 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   int fd_index;               /* Index of newest file descriptor. */
   struct list file_descriptors; /* File descriptor lists */
-
+  struct lock filesys_lock;
   /* James Begin */
 
   struct list children; /* Keep track of children processes and their respective retvals */

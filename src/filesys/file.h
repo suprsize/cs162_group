@@ -12,7 +12,6 @@ struct file {
     off_t pos;           /* Current position. */
     bool deny_write;     /* Has file_deny_write() been called? */
     int fd; /* the file descriptor */
-    struct list_elem elem;
 };
 
 /* Opening and closing files. */
