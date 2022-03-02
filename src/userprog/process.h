@@ -26,8 +26,9 @@ typedef void (*stub_fun)(pthread_fun, void*);
  * track of the return status code of the child proc. 
  */
 struct retval {
-  bool has_been_locked; /* used to ensure no other proccess is using it. */
+  struct lock wait_lock; /* Used to ensure that the parent waits only once. */
   bool has_been_called;
+  tid_t tid; /* The thread ID this struct is refering to. */
 
   int ref_cnt;  /* Determines how many procs are accessing this resource. */
   int value; /* The return status code. */

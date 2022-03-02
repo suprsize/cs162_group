@@ -37,6 +37,7 @@ struct retval* generate_retval() {
   }
 
   _retval->value = -1;
+  _retval->tid = thread_current()->tid;
 
   // the parent references this in the children list.
   // the child references this in the PCb. 
@@ -119,7 +120,7 @@ pid_t process_execute(const char* file_name) {
   struct retval* child_retval;
 
 
-  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+//  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
   current_pcb = thread_current()->pcb;
 
   /* Make a copy of FILE_NAME.
@@ -392,7 +393,7 @@ static void start_process(void* args) {
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
-    sema_up(&temporary);
+    // sema_up(&temporary);
     thread_exit();
   }
 
@@ -415,22 +416,57 @@ static void start_process(void* args) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
+int process_wait(pid_t child_pid) {
+  struct list* children;
+  struct retval* child_retval = NULL;
+  int return_value = -1;
+  //sema_down(&temporary);
 
-  /* James Begin */
+  children = &(thread_current()->pcb->children);
 
-  /* sema_down(&temporary); temporary is placeholder */
+  /* Find the child process retval. */
+  struct list_elem* e;
+  for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
+    struct retval* _retval = list_entry(e, struct retval, elem);
 
-  /* Suggestion: child_retval, sema_down(&wait_sema); */
+    // TODO are TID and PID the same? userprog.pdf has a thing
+    // on this but not sure...
+    if (_retval->tid == child_pid) {
+      child_retval = _retval;
+    }
+  }
 
-  /* run_task in threads/init.c still needs to work correctly
-   after you implement those syscalls, so you probably want to 
-   modify that as well. */
+  /* Not a valid PID */
+  if (child_retval == NULL) {
+    return return_value;
+  }
 
-  /* James End */
+  /* Non-blocking tries to acquire the lock to ensure that 
+   * we only wait() once. */
+  if (lock_held_by_current_thread(&(child_retval->wait_lock))
+      || !lock_try_acquire(&(child_retval->wait_lock))) {
+    return return_value;
+  }
 
-  return 0;
+
+  /* Begin wait for the exit code. */
+  sema_down(&(child_retval->wait_sema));
+
+  return_value = child_retval->value;
+
+  lock_acquire(&(child_retval->ref_cnt_lock));
+  child_retval->ref_cnt -= 1;
+
+  /* Remove the retval from the parent. */
+  list_remove(&(child_retval->elem));
+
+  if (child_retval->ref_cnt <= 0) {
+    free(child_retval);
+  } else {
+    lock_release(&(child_retval->ref_cnt_lock));
+  }
+
+  return return_value;
 }
 
 /* Free the current process's resources. */
@@ -515,7 +551,7 @@ void process_exit(int exit_code) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary); // TODO: Need to replace temporary - James
+//  sema_up(&temporary); // TODO: Need to replace temporary - James
   thread_exit();
 }
 
