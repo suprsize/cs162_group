@@ -198,7 +198,8 @@ void init_fd_table() {
   t->pcb->fd_index = 2;
 }
 
-/* Checks that pointer to arguments are ok. */
+/* Checks that pointer to arguments are ok. Checks stack pointer for argc arguments.
+ * This includes the file name. */
 bool is_valid_args(void* stack_ptr, int argc) {
   int i;
   for (i = 0; i < argc; i += 1) {
@@ -211,22 +212,24 @@ bool is_valid_args(void* stack_ptr, int argc) {
 
 
 /* Checks that the PTR is a valid ptr in current userspace. */
-bool is_valid_ptr(void * ptr) {
-  uint32_t pageDir = thread_current()->pcb->pagedir;
-  if (ptr != NULL && is_user_vaddr(ptr)) {
-    bool is_valid = pagedir_get_page(pageDir, ptr) != NULL;
-    if (!is_valid) {
-      return false;
-    }
+bool is_valid_ptr(void* ptr) {
+  uint32_t* pageDir;
+  if (ptr == NULL) {
+    return false;
   }
 
-  ptr = ptr + sizeof(void *) - 1;
-  if (is_user_vaddr(ptr)) {
-    bool is_valid = pagedir_get_page(pageDir, ptr) != NULL;
-    if (!is_valid) {
-      return false;
-    }
+  pageDir = thread_current()->pcb->pagedir;
+  if (!is_user_vaddr(ptr) || (pagedir_get_page(pageDir, ptr) == NULL)) {
+    return false;
   }
+
+  // ensure that the entire pointer boundary (ptr to ptr + 3) is valid.
+  ptr += sizeof(void*) - 1;
+
+  if (!is_user_vaddr(ptr) || (pagedir_get_page(pageDir, ptr) == NULL)) {
+    return false;
+  }
+
   return true;
 }
 
