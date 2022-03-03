@@ -4,6 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "userprog/exception.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 
@@ -30,8 +31,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   // Stack pointer is invalid.
   if (invalid_ptr) {
     f->eax = -1;
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, f->eax);
-    process_exit(-1);
+    exit_with_error();
     return;
   }
 
@@ -229,7 +229,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   if (invalid_ptr) {
     // We hit invalid buffer so the current process is killed with -1.
     f->eax = -1;
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, f->eax);
-    process_exit(-1);
+    exit_with_error();
   }
 }

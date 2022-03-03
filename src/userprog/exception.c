@@ -12,6 +12,12 @@ static long long page_fault_cnt;
 static void kill(struct intr_frame*);
 static void page_fault(struct intr_frame*);
 
+/* Exits the process with error code -1. */
+void exit_with_error() {
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+  process_exit(-1);
+}
+
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -78,9 +84,7 @@ static void kill(struct intr_frame* f) {
       printf("%s: dying due to interrupt %#04x (%s).\n", thread_name(), f->vec_no,
              intr_name(f->vec_no));
       intr_dump_frame(f);
-      printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
-
-      process_exit(-1);
+      exit_with_error();
       NOT_REACHED();
 
     case SEL_KCSEG:

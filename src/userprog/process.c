@@ -9,6 +9,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/exception.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -345,15 +346,16 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
 }
 
 void close_file(int fd) {
-  //TODO don't know if we have to error if fd was <3 or already closed.
-
   struct myFile* f = get_myFile(fd);
+
   if (f != NULL) {
     if (f->file_ptr != NULL) {
       file_close(f->file_ptr);
       // To indicate that the file descriptor has been close.
       f->file_ptr = NULL;
     }
+  } else {
+    exit_with_error();
   }
 }
 
@@ -410,10 +412,6 @@ static void start_process(void* args) {
     free(pcb_to_free);
     return;
   }
-
-  //TODO COPY FILE DESCRIPTORS OVER FROM PARENT TO CHID
-  //
-  /* James' Suggestion Begin */
 
   /* For tokenization later... */
   char file_name_copy[strlen(file_name) + 1];
