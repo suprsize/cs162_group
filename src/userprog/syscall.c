@@ -228,6 +228,15 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
                    }
 
+    case SYS_COMPUTE_E: {
+      if (!is_valid_args(args, 2)) {
+        invalid_ptr = true;
+        break;
+      }
+      f->eax = sys_sum_to_e(args[1]);
+      break;
+                        }
+
     default:
       break;
   }

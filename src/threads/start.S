@@ -32,6 +32,8 @@ start:
 # Set string instructions to go upward.
 	cld
 
+  # Initialize the FPU
+  fninit
 #### Get memory size, via interrupt 15h function 88h (see [IntrList]),
 #### which returns AX = (kB of physical memory) - 1024.  This only
 #### works for memory sizes <= 65 MB, which should be fine for our
@@ -147,7 +149,7 @@ start:
 #       We don't (yet) support floating point.
 
 	movl %cr0, %eax
-	orl $CR0_PE | CR0_PG | CR0_WP | CR0_EM, %eax
+	orl $CR0_PE | CR0_PG | CR0_WP, %eax
 	movl %eax, %cr0
 
 # We're now in protected mode in a 16-bit segment.  The CPU still has
