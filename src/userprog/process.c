@@ -44,6 +44,7 @@ struct retval* generate_retval() {
   }
 
   _retval->value = -1;
+  _retval->load_success = -1;
   _retval->tid = thread_current()->tid;
 
   // the parent references this in the children list.
@@ -52,6 +53,7 @@ struct retval* generate_retval() {
   _retval->ref_cnt = 2;
 
   sema_init(&(_retval->wait_sema), 0);
+  sema_init(&(_retval->wait_load), 0);
   lock_init(&(_retval->ref_cnt_lock));
 
   return _retval;
@@ -179,8 +181,8 @@ pid_t process_execute(const char* file_name) {
   child_retval = child_pcb->retval;
 
   /* Ensure that LOAD has correctly worked. */
-  sema_down(&(child_retval->wait_sema));
-  bool success_rv = child_retval->value;
+  sema_down(&(child_retval->wait_load));
+  bool success_rv = child_retval->load_success;
 
   /* Load fails */
   if (!success_rv) {
@@ -395,8 +397,8 @@ static void start_process(void* args) {
 
     /* Indicate to the parent proc that we loaded
      * the program successfully. */
-    t->pcb->retval->value = success;
-    sema_up(&(t->pcb->retval->wait_sema));
+    t->pcb->retval->load_success = success;
+    sema_up(&(t->pcb->retval->wait_load));
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
