@@ -19,6 +19,11 @@ static inline int fpu_pop(void) {
   return val;
 }
 
+/* Creates new, clean copy of FPU to 108B at DEST */
+static inline void fpu_init_new(void* dest, void* buf) {
+  asm volatile("fsave (%0); fninit; fsave (%1); frstor (%2)" : : "r"(buf), "r"(dest), "r"(buf));
+}
+
 int sys_sum_to_e(int);
 double sum_to_e(int);
 double abs_val(double);

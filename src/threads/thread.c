@@ -2,6 +2,7 @@
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
+#include <float.h>
 #include <stdio.h>
 #include <string.h>
 #include "threads/flags.h"
@@ -180,6 +181,8 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   struct switch_threads_frame* sf;
   tid_t tid;
 
+  uint32_t fpu_cur[27];
+
   ASSERT(function != NULL);
 
   /* Allocate thread. */
@@ -203,6 +206,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
 
   /* Stack frame for switch_threads(). */
   sf = alloc_frame(t, sizeof *sf);
+  fpu_init_new(&sf->fpu, &fpu_cur);
   sf->eip = switch_entry;
   sf->ebp = 0;
 

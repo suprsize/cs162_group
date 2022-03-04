@@ -3,6 +3,7 @@
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -370,6 +371,8 @@ static void start_process(void* args) {
   struct intr_frame if_;
   bool success, pcb_success;
 
+  uint32_t fpu_cur[27];
+
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
   t->pcb = new_pcb;
@@ -386,6 +389,7 @@ static void start_process(void* args) {
 
   if (success) {
     memset(&if_, 0, sizeof if_);
+    fpu_init_new(&if_.fpu, &fpu_cur);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
