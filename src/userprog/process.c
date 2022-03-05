@@ -486,6 +486,9 @@ static void start_process(void* args) {
   // if_.esp -= _size;
   memcpy(if_.esp, argv, _size);
 
+  //Free temp argv
+  palloc_free_page(argv);
+
   uint32_t argv_addr = if_.esp;
 
   /* Push argv */
@@ -619,11 +622,23 @@ void process_exit(int exit_code) {
   list_remove(&(cur->pcb->elem));
   lock_release(&(pcb_list_lock));
 
+//  // TODO: free the file descriptor table
+//  // remove the elements from the fd list
+//  while(!list_empty(&cur->pcb->file_descriptors)) {
+//    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
+//    // free(list_entry(e, struct file, elem));
+//  }
+
   // TODO: free the file descriptor table
   // remove the elements from the fd list
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
-    // free(list_entry(e, struct file, elem));
+    struct myFile* f = list_entry(e, struct myFile, elem);
+    if (f->file_ptr != NULL) {
+      //TODO this might have to be done with a lock
+      file_close(f->file_ptr);
+    }
+    free(f);
   }
 
   /* Synchornization with retval structs*/
