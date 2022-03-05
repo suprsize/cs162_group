@@ -1,10 +1,8 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
-
 #include "threads/thread.h"
 #include "filesys/file.h"
 #include <stdint.h>
-
 
 // At most 8MB can be allocated to the stack
 // These defines will be used in Project 2: Multithreading
@@ -47,6 +45,7 @@ struct retval {
   struct list_elem elem; /* List element so parent can keep track of stuff. */
 };
 
+struct list pcb_list; /* A list of all processes */
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
@@ -64,6 +63,7 @@ struct process {
 
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
+  struct list_elem elem; /* List element so parent can keep track of stuff. */
 };
 
 void userprog_init(void);

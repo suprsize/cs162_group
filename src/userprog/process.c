@@ -24,6 +24,10 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 
+/* A list of all processes */
+struct list pcb_list;
+struct lock pcb_list_lock;
+
 struct myFile {
   struct file* file_ptr;
   struct list_elem elem;
@@ -108,6 +112,10 @@ void userprog_init(void) {
   struct thread* t = thread_current();
   bool success;
 
+  /* Initialize the process list and its lock. */
+  lock_init(&(pcb_list_lock));
+  list_init(&(pcb_list));
+
   /* Allocate process control block
      It is imoprtant that this is a call to calloc and not malloc,
      so that t->pcb->pagedir is guaranteed to be NULL (the kernel's
@@ -118,6 +126,11 @@ void userprog_init(void) {
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
+
+  /* Add this PCB to the global PCB list */
+  lock_acquire(&(pcb_list_lock));
+  list_push_back(&(pcb_list), &(t->pcb->elem));
+  lock_release(&(pcb_list_lock));
 
   /* There is no parent of the init process. Retval of this is only referneced by me. */
   t->pcb->retval->ref_cnt = 1;
@@ -173,11 +186,17 @@ pid_t process_execute(const char* file_name) {
   sema_down(&(child_thread->pcb_ready));
   child_pcb = child_thread->pcb;
 
+
   // Neccesary.
   // there is a chance that PCB allocation fails.
   if (child_pcb == NULL)  {
     return tid;
   }
+
+  /* Add the PCB to the list of PCBs. */
+  lock_acquire(&(pcb_list_lock));
+  list_push_back(&(pcb_list), &(child_pcb->elem));
+  lock_release(&(pcb_list_lock));
 
   child_retval = child_pcb->retval;
 
@@ -189,6 +208,7 @@ pid_t process_execute(const char* file_name) {
   if (!success_rv) {
     return -1;
   }
+
   
   /* Push the child retval struct into current PCB's children list. */
   list_push_back(&current_pcb->children, &child_retval->elem);
@@ -483,6 +503,7 @@ static void start_process(void* args) {
 
   /* Change the process name to get rid of the arguments. */
   strlcpy(t->pcb->process_name, &file_name_cpy, length + 1);
+  t->pcb->process_name[length] = NULL;
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
@@ -563,6 +584,23 @@ int process_wait(pid_t child_pid) {
   return return_value;
 }
 
+/* Retrieves the PCB given a filename. */
+struct process* get_pcb_by_name(char* filename) {
+  struct list_elem* e;
+  lock_acquire(&(pcb_list_lock));
+  for (e = list_begin(&(pcb_list)); e != list_end(&(pcb_list));
+      e = list_next(e)) {
+    struct process* _pcb = list_entry(e, struct process, elem);
+    if (strcmp(_pcb->process_name, filename) == 0) {
+      lock_release(&(pcb_list_lock));
+      return _pcb;
+    }
+  }
+
+  lock_release(&(pcb_list_lock));
+  return NULL;
+}
+
 /* Free the current process's resources. */
 void process_exit(int exit_code) {
   struct thread* cur = thread_current();
@@ -575,6 +613,11 @@ void process_exit(int exit_code) {
     thread_exit();
     NOT_REACHED();
   }
+
+  /* Remove the PCB from the list of PCBs. */
+  lock_acquire(&(pcb_list_lock));
+  list_remove(&(cur->pcb->elem));
+  lock_release(&(pcb_list_lock));
 
   // TODO: free the file descriptor table
   // remove the elements from the fd list

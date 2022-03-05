@@ -74,6 +74,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         lock_acquire(file_lock);
 
         struct file* opened_file = filesys_open(filename);
+
+        if (get_pcb_by_name(filename) != NULL) {
+          file_deny_write(opened_file);
+        }
+
         f->eax = add_fd(opened_file);
 
         lock_release(file_lock);
