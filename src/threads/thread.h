@@ -90,6 +90,7 @@ struct thread {
   int priority;              /* Priority. */
   int e_priority;              /* effective priority. */
   struct list_elem allelem;  /* List element for all threads list. */
+  struct list p_donors; /* List of locks that we're being donated to. */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -104,6 +105,8 @@ struct thread {
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
+
+struct thread* next_schedule_prio(void);
 
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */

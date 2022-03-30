@@ -364,9 +364,19 @@ struct thread* thread_get(tid_t tid) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
   thread_current()->priority = new_priority;
-  if (new_priority > thread_current()->e_priority) {
+
+  if (new_priority > thread_current()->e_priority 
+      || list_empty(&(thread_current()->p_donors))) {
     thread_current()->e_priority = new_priority;
   }
+
+  /* Yield if the current thread no longer has highest priority. */
+  struct thread* highest_t = next_schedule_prio();
+
+  if(highest_t->e_priority > thread_current()->e_priority) {
+    thread_yield();
+  }
+
 }
 
 /* Returns the current thread's priority. */
@@ -475,6 +485,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
   sema_init(& (t->pcb_ready), 0);
+  list_init(& (t->p_donors));
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
@@ -501,7 +512,7 @@ static struct thread* thread_schedule_fifo(void) {
 }
 
 /* Helper function for strict priority scheduling */
-static struct thread* next_schedule_prio(void) {
+struct thread* next_schedule_prio(void) {
   if (list_empty(&prio_ready_list)) {
     return idle_thread;
   }
