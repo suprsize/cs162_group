@@ -220,6 +220,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Add to run queue. */
   thread_unblock(t);
 
+  /* Preempt the thread if the created thread has higher priority. */
+  if (t->e_priority > thread_get_priority()) {
+    intr_yield_on_return();
+  }
+
   return tid;
 }
 
@@ -307,6 +312,7 @@ void thread_exit(void) {
      when it calls thread_switch_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
+  // list_remove(&thread_current()->elem);
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -369,9 +375,6 @@ int thread_get_priority(void) {
     return thread_current()->e_priority;
   return thread_current()->priority;
 }
-
-/* Returns the current thread's effective priority. */
-int thread_get_e_priority(void) { return thread_current()->e_priority; }
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
@@ -497,6 +500,8 @@ static struct thread* thread_schedule_fifo(void) {
     return idle_thread;
 }
 
+/* Helper function for strict priority scheduling */
+
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   if (list_empty(&prio_ready_list)) {
@@ -511,13 +516,13 @@ static struct thread* thread_schedule_prio(void) {
       e = list_next(e)) {
     struct thread* t = list_entry(e, struct thread, elem);
 
-    // TODO do we want to do anything with the list?
-    int _priority = thread_get_priority();
+    int _priority = t->e_priority;
     if (_priority > highest_priority) {
       retval = t;
       highest_priority = _priority;
     }
   }
+  list_remove(&(retval->elem));
   return retval;
 }
 
