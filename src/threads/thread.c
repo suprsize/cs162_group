@@ -222,7 +222,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
 
   /* Preempt the thread if the created thread has higher priority. */
   if (t->e_priority > thread_get_priority()) {
-    intr_yield_on_return();
+    thread_yield();
   }
 
   return tid;
@@ -501,9 +501,7 @@ static struct thread* thread_schedule_fifo(void) {
 }
 
 /* Helper function for strict priority scheduling */
-
-/* Strict priority scheduler */
-static struct thread* thread_schedule_prio(void) {
+static struct thread* next_schedule_prio(void) {
   if (list_empty(&prio_ready_list)) {
     return idle_thread;
   }
@@ -522,8 +520,14 @@ static struct thread* thread_schedule_prio(void) {
       highest_priority = _priority;
     }
   }
-  list_remove(&(retval->elem));
   return retval;
+}
+
+/* Strict priority scheduler */
+static struct thread* thread_schedule_prio(void) {
+  struct thread* to_run = next_schedule_prio();
+  list_remove(&(to_run->elem));
+  return to_run;
 }
 
 /* Fair priority scheduler */
