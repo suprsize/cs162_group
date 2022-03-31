@@ -484,6 +484,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->e_priority = priority;
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+  t->alarm_time = 0;
   sema_init(& (t->pcb_ready), 0);
   list_init(& (t->p_donors));
 
