@@ -399,7 +399,26 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
   ASSERT(lock_held_by_current_thread(lock));
 
   if (!list_empty(&cond->waiters)) {
-    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+    struct list_elem *e;
+    int highest_priority = -1;
+
+    struct semaphore* wakeup_s;
+    struct semaphore_elem* wakeup_se;
+
+    for (e = list_begin(&cond->waiters); e != list_end(&cond->waiters);
+        e = list_next(e)) {
+      struct semaphore_elem* se = list_entry(e, struct semaphore_elem, elem);
+      struct semaphore* s = &se->semaphore;
+      struct thread* t = next_schedule_prio(&s->waiters);
+      if (t->e_priority > highest_priority) {
+        wakeup_s = s;
+        wakeup_se = se;
+        highest_priority = t->e_priority;
+      }
+    }
+    list_remove(&wakeup_se->elem);
+    sema_up(wakeup_s);
+    //sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
   }
 }
 
