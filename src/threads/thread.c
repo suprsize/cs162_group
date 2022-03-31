@@ -321,12 +321,13 @@ void thread_exit(void) {
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void thread_yield(void) {
-  struct thread* cur = thread_current();
   enum intr_level old_level;
+  struct thread* cur = thread_current();
 
   ASSERT(!intr_context());
 
   old_level = intr_disable();
+
   if (cur != idle_thread)
     thread_enqueue(cur);
   cur->status = THREAD_READY;
@@ -371,8 +372,7 @@ void thread_set_priority(int new_priority) {
   }
 
   /* Yield if the current thread no longer has highest priority. */
-  struct thread* highest_t = next_schedule_prio();
-
+  struct thread* highest_t = next_schedule_prio(&prio_ready_list);
   if(highest_t->e_priority > thread_current()->e_priority) {
     thread_yield();
   }
@@ -512,8 +512,8 @@ static struct thread* thread_schedule_fifo(void) {
 }
 
 /* Helper function for strict priority scheduling */
-struct thread* next_schedule_prio(void) {
-  if (list_empty(&prio_ready_list)) {
+struct thread* next_schedule_prio(struct list* lst) {
+  if (lst == NULL || list_empty(lst)) {
     return idle_thread;
   }
 
@@ -521,7 +521,7 @@ struct thread* next_schedule_prio(void) {
   struct list_elem *e;
   struct thread* retval;
 
-  for (e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list);
+  for (e = list_begin(lst); e != list_end(lst);
       e = list_next(e)) {
     struct thread* t = list_entry(e, struct thread, elem);
 
@@ -536,7 +536,7 @@ struct thread* next_schedule_prio(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  struct thread* to_run = next_schedule_prio();
+  struct thread* to_run = next_schedule_prio(&prio_ready_list);
   list_remove(&(to_run->elem));
   return to_run;
 }
