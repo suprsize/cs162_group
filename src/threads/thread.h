@@ -95,6 +95,8 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
+  struct semaphore pstack_ready; /* Used to notify parent thread that user stack is ready. */
+
 #ifdef USERPROG
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */

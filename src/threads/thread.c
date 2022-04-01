@@ -443,6 +443,7 @@ static void idle(void* idle_started_ UNUSED) {
   }
 }
 
+
 /* Function used as the basis for a kernel thread. */
 static void kernel_thread(thread_func* function, void* aux) {
   ASSERT(function != NULL);
@@ -485,6 +486,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
   sema_init(& (t->pcb_ready), 0);
+  sema_init(& (t->pstack_ready), 0);
   list_init(& (t->p_donors));
 
   old_level = intr_disable();
