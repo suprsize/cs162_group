@@ -33,11 +33,17 @@ struct myFile {
   struct list_elem elem;
 };
 
+struct start_pthread_args {
+  struct semaphore tid_ready;
+  tid_t tid;
+  void* aux;
+};
+
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
-bool setup_thread(void (**eip)(void), void** esp);
+bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf);
 
 /* Generates a retval struct so procs can read/write exit
  * codes in a synchronized manner.*/
@@ -187,7 +193,6 @@ pid_t process_execute(const char* file_name) {
    * retval struct. */
   sema_down(&(child_thread->pcb_ready));
   child_pcb = child_thread->pcb;
-
 
   // Neccesary.
   // there is a chance that PCB allocation fails.
@@ -1039,7 +1044,34 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { return false; }
+bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
+  uint8_t* kpage;
+
+  *esp = PHYS_BASE - PGSIZE;
+  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (kpage == NULL) {
+    return false;
+  }
+
+  while (pagedir_get_page(kpage, *esp) != NULL) {
+    *esp -= PGSIZE;
+  }
+
+  if (!install_page(*esp, kpage, true)) {
+    return false;
+  }
+  void* NULL_TERMINATOR = 0x0;
+  memcpy(*esp, NULL_TERMINATOR, sizeof(void *));
+  *esp -=sizeof(void*);
+
+  memcpy(*esp, *eip, sizeof(void *));
+  *esp -= sizeof(void *);
+
+  memcpy(*esp, tf, sizeof(void *));
+  *esp -= sizeof(void *);
+
+  return true;
+}
 
 /* Starts a new thread with a new user stack running SF, which takes
    TF and ARG as arguments on its user stack. This new thread may be
@@ -1050,7 +1082,19 @@ bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { return false; 
    This function will be implemented in Project 2: Multithreading and
    should be similar to process_execute (). For now, it does nothing.
    */
-tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) { return -1; }
+tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
+  tid_t retval;
+  void* esp;
+  void* eip;
+  struct start_pthread_args s_args;
+
+  eip = sf;
+  if (!setup_thread(&eip, &esp, arg, tf)) {
+    return TID_ERROR;
+  }
+
+  return retval;
+}
 
 /* A thread function that creates a new user thread and starts it
    running. Responsible for adding itself to the list of threads in
@@ -1058,7 +1102,8 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
 
    This function will be implemented in Project 2: Multithreading and
    should be similar to start_process (). For now, it does nothing. */
-static void start_pthread(void* exec_ UNUSED) {}
+static void start_pthread(struct start_pthread_args* args) {
+}
 
 /* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on

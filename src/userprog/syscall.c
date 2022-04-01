@@ -37,6 +37,27 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
 
+    case SYS_PT_CREATE : {
+
+      if (!is_valid_args(args, 4)
+          || !is_valid_ptr(args[1])
+          || !is_valid_ptr(args[2])) {
+        invalid_ptr = true;
+        break;
+      }
+
+      tid_t res = pthread_execute(args[1], args[2], args[3]);
+      f->eax = res;
+      break;
+                         }
+
+    case SYS_PT_EXIT : {
+      break;
+                         }
+
+    case SYS_PT_JOIN : {
+      break;
+                         }
 
     case SYS_CREATE: {
       char *filename = args[1];
@@ -54,7 +75,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_REMOVE: {
-      //TODO might have to do some checking about what is being removed.
       char * filename = args[1];
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
