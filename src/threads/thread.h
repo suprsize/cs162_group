@@ -92,6 +92,8 @@ struct thread {
   struct list_elem allelem;  /* List element for all threads list. */
   struct list p_donors;      /* List of locks that we're being donated to. */
 
+  int alarm_time;       /* Store information for when the thread can wake up. */
+
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
