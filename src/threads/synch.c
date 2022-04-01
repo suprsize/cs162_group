@@ -27,6 +27,7 @@
 */
 
 #include "threads/synch.h"
+#include "list.h"
 #include <stdio.h>
 #include <string.h>
 #include "threads/interrupt.h"
@@ -215,26 +216,20 @@ bool user_lock_init(struct lock* lock) {
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. */
-void lock_acquire(struct lock* lock) {
+   we need to sleep. 
+   Acquires lock for user thread and includes lock priority donation. */
+void lock_acquire (struct lock* lock) {
+  //sema_down(&lock->semaphore);
+  //lock->holder = thread_current();
   ASSERT(lock != NULL);
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
-  sema_down(&lock->semaphore);
-  lock->holder = thread_current();
-}
-
-/* Acquires lock for user thread and includes lock priority donation. */
-void user_lock_acquire (struct lock* lock) {
-  //sema_down(&lock->semaphore);
-  //lock->holder = thread_current();
   enum intr_level old_level;
   old_level = intr_disable ();
   struct thread* current = thread_current();
   struct lock* ulock = lock;
   if (!sema_try_down(&lock->semaphore)) {
-
     while (fix_compare(ulock->e_priority, current->e_priority) == -1) {
       ulock->e_priority = current->e_priority;
       current = ulock->holder;
@@ -242,16 +237,18 @@ void user_lock_acquire (struct lock* lock) {
     	  break;
       current->e_priority = ulock->e_priority;
     }
-
     sema_down(&lock->semaphore);
   }
 
   current = thread_current();
   lock->holder = current;
-  list_push_back (&current->p_donors, &lock->holder);
+  list_push_back(&current->p_donors, &lock->holder);
   if (fix_compare(ulock->e_priority, current->e_priority) == 1)
     current->e_priority = lock->e_priority;
   intr_set_level(old_level);
+
+  sema_down(&lock->semaphore);
+  lock->holder = thread_current();
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -276,22 +273,35 @@ bool lock_try_acquire(struct lock* lock) {
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler. */
+   handler.
+
+   Releases the lock for user threads and includes priority donation. 
+   Should reset a thread's priority that held the lock back to the 
+   maximum of base priority or other donations. */
 void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
+  struct thread* current = thread_current(); 
+  int b_prio = thread_get_priority();
+  int max_prio = 0;
+
+  /* If effective priority is not base priority, revert to max(base, other donations) */
+  if (current->e_priority != current->priority) {
+    for (Lock donorLock : current->p_donors) {
+      if (donorLock == lock) {
+        list_remove(donorLock);
+      }
+      if (donorLock->holder->e_priority > max_prio && donorLock != lock) {
+        max_prio = donorLock->holder->e_priority;
+      }
+    }
+  }
+  current->e_priority = max_prio;
+
+  /* Release lock. */
   lock->holder = NULL;
   sema_up(&lock->semaphore);
-}
-
-/* Releases the lock for user threads and includes priority donation. */
-void user_lock_release (struct lock* lock) {
-  //lock->holder = NULL;
-  //sema_up(&lock->semaphore);
-  struct thread* current = thread_current();
-  struct lock* ulock = lock;
-
 }
 
 /* Returns true if the current thread holds LOCK, false
