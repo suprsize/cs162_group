@@ -209,8 +209,31 @@ void lock_acquire(struct lock* lock) {
 
 /* Acquires lock for user thread and includes lock priority donation. */
 void user_lock_acquire (struct lock* lock) {
-  sema_own(&lock->semaphore);
-  lock->holder = thread_current();
+  //sema_down(&lock->semaphore);
+  //lock->holder = thread_current();
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  struct thread* current = thread_current();
+  struct lock* ulock = lock;
+  if (!sema_try_down(&lock->semaphore)) {
+
+    while (fix_compare(ulock->e_priority, current->e_priority) == -1) {
+      ulock->e_priority = current->e_priority;
+      current = ulock->holder;
+      if (fix_compare(ulock->e_priority, current->e_priority) < 1)
+    	  break;
+      current->e_priority = ulock->e_priority;
+    }
+
+    sema_down(&lock->semaphore);
+  }
+
+  current = thread_current();
+  lock->holder = current;
+  list_push_back (&current->p_donors, &lock->holder);
+  if (fix_compare(ulock->e_priority, current->e_priority) == 1)
+    current->e_priority = lock->e_priority;
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -246,8 +269,11 @@ void lock_release(struct lock* lock) {
 
 /* Releases the lock for user threads and includes priority donation. */
 void user_lock_release (struct lock* lock) {
-  lock->holder = NULL;
-  sema_up(&lock->semaphore);
+  //lock->holder = NULL;
+  //sema_up(&lock->semaphore);
+  struct thread* current = thread_current();
+  struct lock* ulock = lock;
+
 }
 
 /* Returns true if the current thread holds LOCK, false
