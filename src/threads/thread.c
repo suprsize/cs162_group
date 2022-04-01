@@ -365,24 +365,28 @@ struct thread* thread_get(tid_t tid) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
   thread_current()->priority = new_priority;
+}
 
-  if (new_priority > thread_current()->e_priority 
-      || list_empty(&(thread_current()->p_donors))) {
-    thread_current()->e_priority = new_priority;
+int get_effective_priority(struct thread *t) {
+
+  int priority = t->priority;
+
+  struct list locks = t->p_donors;
+
+  for (struct list_elem *e = list_begin(&locks); e != list_end(&locks); e = list_next(e)) {
+    struct lock *l = list_entry(e, struct lock, elem);
+
+    if (l->holder->priority > priority) {
+      priority = l->holder->priority;
+    }
   }
 
-  /* Yield if the current thread no longer has highest priority. */
-  struct thread* highest_t = next_schedule_prio(&prio_ready_list);
-  if(highest_t->e_priority > thread_current()->e_priority) {
-    thread_yield();
-  }
+  return priority;
 }
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) {
-  if (thread_current()->priority < thread_current()->e_priority)
-    return thread_current()->e_priority;
-  return thread_current()->priority;
+  return get_effective_priority(thread_current());
 }
 
 /* Sets the current thread's nice value to NICE. */
