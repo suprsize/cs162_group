@@ -106,7 +106,7 @@ struct thread {
   unsigned magic; /* Detects stack overflow. */
 };
 
-struct thread* next_schedule_prio(void);
+struct thread* next_schedule_prio(struct list* lst);
 
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
