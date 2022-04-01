@@ -376,7 +376,6 @@ void thread_set_priority(int new_priority) {
   if(highest_t->e_priority > thread_current()->e_priority) {
     thread_yield();
   }
-
 }
 
 /* Returns the current thread's priority. */
