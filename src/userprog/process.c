@@ -34,8 +34,11 @@ struct myFile {
 };
 
 struct start_pthread_args {
-  struct semaphore tid_ready;
-  tid_t tid;
+  struct semaphore stack_ready;
+  stub_fun sf;
+  pthread_fun tf;
+  struct process* daddy;
+  bool error;
   void* aux;
 };
 
@@ -248,19 +251,15 @@ bool is_valid_ptr(void* ptr) {
   if (ptr == NULL) {
     return false;
   }
-
   pageDir = thread_current()->pcb->pagedir;
   if (!is_user_vaddr(ptr) || (pagedir_get_page(pageDir, ptr) == NULL)) {
     return false;
   }
-
   // ensure that the entire pointer boundary (ptr to ptr + 3) is valid.
   ptr += sizeof(void*) - 1;
-
   if (!is_user_vaddr(ptr) || (pagedir_get_page(pageDir, ptr) == NULL)) {
     return false;
   }
-
   return true;
 }
 
@@ -1046,29 +1045,33 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    function signature. */
 bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
   uint8_t* kpage;
+  uint8_t* esp_l;
 
-  *esp = PHYS_BASE - PGSIZE;
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  esp_l = ((uint8_t *) PHYS_BASE) - PGSIZE;
   if (kpage == NULL) {
     return false;
   }
 
-  while (pagedir_get_page(kpage, *esp) != NULL) {
-    *esp -= PGSIZE;
+  while (pagedir_get_page(thread_current()->pcb->pagedir, esp_l) != NULL
+      || pagedir_get_page(kpage, esp_l) != NULL) {
+    esp_l = ((uint8_t *) esp_l) - PGSIZE;
   }
 
-  if (!install_page(*esp, kpage, true)) {
+  if (!install_page(esp_l, kpage, true)) {
+    palloc_free_page(kpage);
     return false;
   }
+
   void* NULL_TERMINATOR = 0x0;
-  memcpy(*esp, NULL_TERMINATOR, sizeof(void *));
-  *esp -=sizeof(void*);
+  memcpy(esp_l, NULL_TERMINATOR, sizeof(void *));
+  esp_l -= sizeof(void*);
 
-  memcpy(*esp, *eip, sizeof(void *));
-  *esp -= sizeof(void *);
+  memcpy(esp_l, *eip, sizeof(void *));
+  esp_l -= sizeof(void *);
 
-  memcpy(*esp, tf, sizeof(void *));
-  *esp -= sizeof(void *);
+  memcpy(esp_l, tf, sizeof(void *));
+  esp_l -= sizeof(void *);
 
   return true;
 }
@@ -1084,14 +1087,24 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
    */
 tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
   tid_t retval;
-  void* esp;
-  void* eip;
   struct start_pthread_args s_args;
 
-  eip = sf;
-  if (!setup_thread(&eip, &esp, arg, tf)) {
-    return TID_ERROR;
+  s_args.sf = sf;
+  s_args.error = true;
+  s_args.tf = tf;
+  s_args.aux = arg;
+  s_args.daddy = thread_current()->pcb;
+
+  sema_init(&s_args.stack_ready, 0);
+
+  retval = thread_create("pthread_child", PRI_DEFAULT, start_pthread, &s_args);
+
+  if (retval == TID_ERROR) {
+    return retval;
   }
+
+  /* Wait for the user stack to be ready. */
+  sema_down(&s_args.stack_ready);
 
   return retval;
 }
@@ -1102,7 +1115,46 @@ tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
 
    This function will be implemented in Project 2: Multithreading and
    should be similar to start_process (). For now, it does nothing. */
-static void start_pthread(struct start_pthread_args* args) {
+static void start_pthread(void* aux) {
+  struct start_pthread_args* s_args;
+  void* stack;
+  void* eip;
+  struct intr_frame if_;
+  uint32_t fpu_cur[27];
+
+  s_args = (struct start_pthread_args *) aux;
+
+  thread_current()->pcb = s_args->daddy;
+
+  /* Setup the stack */
+  // bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
+  if (!(s_args->error = setup_thread(&eip, &stack, s_args->aux, s_args->tf))) {
+    // TODO exit thread?
+    sema_up(&s_args->stack_ready);
+    return;
+  }
+
+  eip = s_args->sf;
+
+  memset(&if_, 0, sizeof if_);
+  fpu_init_new(&if_.fpu, &fpu_cur);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+
+  if_.esp = stack;
+  if_.eip = eip;
+
+  /* Notify pthread_execute that we're good! */
+  sema_up(&s_args->stack_ready);
+
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
 }
 
 /* Waits for thread with TID to die, if that thread was spawned
