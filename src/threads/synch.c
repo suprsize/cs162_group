@@ -219,36 +219,49 @@ bool user_lock_init(struct lock* lock) {
    we need to sleep. 
    Acquires lock for user thread and includes lock priority donation. */
 void lock_acquire (struct lock* lock) {
-  //sema_down(&lock->semaphore);
-  //lock->holder = thread_current();
+  
   ASSERT(lock != NULL);
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
   enum intr_level old_level;
-  old_level = intr_disable ();
-  struct thread* current = thread_current();
-  struct lock* ulock = lock;
-  if (!sema_try_down(&lock->semaphore)) {
-    while (fix_compare(ulock->e_priority, current->e_priority) == -1) {
-      ulock->e_priority = current->e_priority;
-      current = ulock->holder;
-      if (fix_compare(ulock->e_priority, current->e_priority) < 1)
-    	  break;
-      current->e_priority = ulock->e_priority;
+
+  struct thread *current_thread = thread_current();
+
+  // old_level = intr_disable(); ?
+
+  if (lock->holder != NULL) {
+    current_thread->waiting_on = lock;
+
+    struct lock *lock_ptr = lock;
+    struct thread *lock_holder;
+
+    while (lock_ptr) {
+      lock_holder = lock_ptr->holder;
+
+      // Might be redundant to check.. since current thread should already be the highest,
+      // .. but maybe there is a sleeping thread that has higher priority that is also 
+      // holding our lock
+
+      if (lock_holder->e_priority < current_thread->e_priority) {
+        lock_holder->e_priority = current_thread->e_priority;
+        lock_ptr = lock_holder->waiting_on;
+        continue;
+      } break;
     }
-    sema_down(&lock->semaphore);
   }
 
-  current = thread_current();
-  lock->holder = current;
-  list_push_back(&current->p_donors, &lock->holder);
-  if (fix_compare(ulock->e_priority, current->e_priority) == 1)
-    current->e_priority = lock->e_priority;
-  intr_set_level(old_level);
+  // intr_set_level(old_level); ?
 
   sema_down(&lock->semaphore);
-  lock->holder = thread_current();
+
+  
+  old_level = intr_disable();
+
+  current_thread->waiting_on = NULL;
+  lock->holder = current_thread;
+
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -282,26 +295,21 @@ void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
-  struct thread* current = thread_current(); 
-  int b_prio = thread_get_priority();
-  int max_prio = 0;
+  struct thread *t = thread_current();
 
-  /* If effective priority is not base priority, revert to max(base, other donations) */
-  if (current->e_priority != current->priority) {
-    for (Lock donorLock : current->p_donors) {
-      if (donorLock == lock) {
-        list_remove(donorLock);
-      }
-      if (donorLock->holder->e_priority > max_prio && donorLock != lock) {
-        max_prio = donorLock->holder->e_priority;
-      }
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  for (struct list_elem *e = list_begin(&t->locks); e != list_end(&t->locks); e = list_next(e)) {
+    if (lock == list_entry(e, struct lock, elem)) {
+      list_remove(e);
     }
   }
-  current->e_priority = max_prio;
 
-  /* Release lock. */
   lock->holder = NULL;
   sema_up(&lock->semaphore);
+
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
