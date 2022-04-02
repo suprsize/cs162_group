@@ -51,15 +51,40 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
                          }
 
-    case SYS_PT_EXIT : {
+    case SYS_PT_EXIT: {
       pthread_exit();
       break;
                          }
 
+    case SYS_LOCK_INIT: {
+      break;
+                         }
+
+    case SYS_LOCK_ACQUIRE: {
+      break;
+                         }
+
+    case SYS_LOCK_RELEASE: {
+      break;
+                         }
+    case SYS_SEMA_INIT: {
+      break;
+                         }
+    case SYS_SEMA_DOWN: {
+      break;
+                         }
+    case SYS_SEMA_UP: {
+      break;
+                         }
+
+    case SYS_GET_TID: {
+      f->eax = thread_current()->tid;
+      break;
+                      }
+
     case SYS_PT_JOIN : {
 
-      if (!is_valid_args(args, 2)
-          || !is_valid_ptr(args[1])) {
+      if (!is_valid_args(args, 2)) {
         invalid_ptr = true;
         break;
       }
