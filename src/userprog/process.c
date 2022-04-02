@@ -638,6 +638,11 @@ void process_exit(int exit_code) {
   // TODO we may need a lock on this.
   cur->pcb->exit = true;
 
+  // TODO wait for all other threads to die.
+  
+
+
+
   /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
   list_remove(&(cur->pcb->elem));
@@ -1131,19 +1136,23 @@ static void start_pthread(void* aux) {
   s_args = (struct start_pthread_args *) aux;
 
   thread_current()->pcb = s_args->daddy;
-    struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
-    new_thread_retval->tid = thread_current()->tid;
-    lock_init(&new_thread_retval->join_lock);
-    sema_init(&new_thread_retval->join_sema, 0);
-    list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
-    thread_current()->retval = new_thread_retval;
-    process_activate();
 
-    memset(&if_, 0, sizeof if_);
-    fpu_init_new(&if_.fpu, &fpu_cur);
-    if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-    if_.cs = SEL_UCSEG;
-    if_.eflags = FLAG_IF | FLAG_MBS;
+  struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
+
+  new_thread_retval->tid = thread_current()->tid;
+  lock_init(&new_thread_retval->join_lock);
+  sema_init(&new_thread_retval->join_sema, 0);
+
+  list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
+  thread_current()->retval = new_thread_retval;
+
+  process_activate();
+
+  memset(&if_, 0, sizeof if_);
+  fpu_init_new(&if_.fpu, &fpu_cur);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Setup the stack */
   // bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
@@ -1260,7 +1269,7 @@ void pthread_exit_main(void) {
     struct thread_retval* retval;
 
     while (!list_empty(retvals)) {
-      e = list_pop_front(retvals);
+      e = list_front(retvals);
       retval = list_entry(e, struct thread_retval, elem);
       if (retval->tid != t->tid) {
           pthread_join(retval->tid);
