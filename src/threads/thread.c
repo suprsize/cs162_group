@@ -497,7 +497,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
   sema_init(& (t->pcb_ready), 0);
-  list_init(& (t->p_donors));
+  list_init(& (t->locks));
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);

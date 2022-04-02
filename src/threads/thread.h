@@ -92,6 +92,7 @@ struct thread {
 
   struct list_elem allelem;  /* List element for all threads list. */
   struct list locks;         /* List of locks we're holding. */
+  struct list_elem waiter_elem; /* List of waiters in lock. */
 
   int alarm_time;       /* Store information for when the thread can wake up. */
 

@@ -229,7 +229,7 @@ void lock_acquire (struct lock* lock) {
 
   if (lock->holder != NULL) {
     current_thread->waiting_on = lock;
-    list_push_back(&lock->waiters, &current->elem);
+    list_push_back(&lock->waiters, &current->waiter_elem);
     struct lock *lock_ptr = lock;
     struct thread *lock_holder;
 
@@ -249,7 +249,7 @@ void lock_acquire (struct lock* lock) {
   }
 
   sema_down(&lock->semaphore);
-  list_remove(&lock->waiters, &current->elem);
+  list_remove(&current->waiter_elem);
   lock->holder = thread_current();
   list_push_back(&current->locks, &lock->elem);
   intr_set_level(old_level);
@@ -302,7 +302,7 @@ void lock_release(struct lock* lock) {
     } 
   }
   for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
-    t = list_entry(e, struct thread, elem);
+    t = list_entry(e, struct thread, waiters_elem);
     if (t->e_priority > max_prio) {
       max_prio = t->e_priority;
     }
