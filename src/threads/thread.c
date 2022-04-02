@@ -371,50 +371,27 @@ void thread_set_priority(int new_priority) {
 
   current_thread->priority = new_priority;
 
-  if (current_thread->e_priority < new_priority) {
+  if (current_thread->e_priority < new_priority || list_empty(&current_thread->locks)) {
     current_thread->e_priority = new_priority;
 
     // maybe just ignore the second half and preempt here with thread_yield
     // then have the scheduler sort out which thread now has highest priority..
+    thread_yield();
+  }
 
-
-  } // Also mentions something about checking the lock list?
-
-  int highest_priority = current_thread->e_priority;
-
+  /*int highest_priority = current_thread->e_priority;
   for (struct list_elem *e = list_begin(&prio_ready_list);
     e != list_end(&prio_ready_list); e = list_next(e)) {
-
     struct thread *t = list_entry(e, struct thread, elem);
-
     if (t->e_priority > highest_priority) {
       highest_priority = t->e_priority;
     }
   }
-
   if (highest_priority > current_thread->e_priority) {
     thread_yield();
-  }
-
+  }*/
   intr_set_level(old_level);
 }
-
-// int get_effective_priority(struct thread *t) {
-
-//   int priority = (t->priority < t->e_priority) ? t->e_priority : t->priority;
-
-//   struct list locks = t->locks;
-
-  // for (struct list_elem *e = list_begin(&locks); e != list_end(&locks); e = list_next(e)) {
-  //   struct lock *l = list_entry(e, struct lock, elem);
-
-  //   if (l->holder->priority > priority) {
-  //     priority = l->holder->priority;
-  //   }
-  // }
-
-//   return (t->e_priority = priority);
-// }
 
 /* Returns the current thread's effective priority. */
 int thread_get_priority(void) {
