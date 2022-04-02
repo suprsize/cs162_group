@@ -87,6 +87,8 @@ struct thread {
   enum thread_status status; /* Thread state. */
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
+  uint8_t* user_stack;        /* The user stack. */
+  uint8_t* kpage;            /* The kernel page for stack mapping. */
   int priority;              /* Priority. */
   int e_priority;              /* effective priority. */
   struct list_elem allelem;  /* List element for all threads list. */
@@ -107,6 +109,16 @@ struct thread {
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
+
+struct thread_retval {
+  tid_t tid;
+  bool is_terminated;
+
+  struct lock join_lock;
+  struct semaphore join_sema;
+
+  struct list_elem elem;
+}
 
 struct thread* next_schedule_prio(struct list* lst);
 

@@ -52,6 +52,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
                          }
 
     case SYS_PT_EXIT : {
+      pthread_exit();
       break;
                          }
 

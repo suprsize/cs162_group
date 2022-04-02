@@ -1046,7 +1046,9 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
 bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
   uint8_t* kpage;
   uint8_t* esp_l;
+  struct thread* t;
 
+  t = thread_current();
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   esp_l = ((uint8_t *) PHYS_BASE) - PGSIZE;
   if (kpage == NULL) {
@@ -1061,6 +1063,10 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
     palloc_free_page(kpage);
     return false;
   }
+
+  t->user_stack = esp_l;
+  t->kpage = kpage;
+
   esp_l -= sizeof(void *);
   memcpy((void*) esp_l, &arg, sizeof(void*));
   esp_l -= sizeof(void *);
@@ -1136,6 +1142,7 @@ static void start_pthread(void* aux) {
   }
 
   if_.esp = stack;
+
   if_.eip = s_args->sf;
 
   /* Notify pthread_execute that we're good! */
@@ -1168,7 +1175,22 @@ tid_t pthread_join(tid_t tid UNUSED) { return -1; }
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {}
+void pthread_exit(void) {
+  struct thread* t;
+
+  t = thread_current();
+
+  if (t->pcb->main_thread == t) {
+    pthread_exit_main();
+  }
+  pagedir_clear_page(t->pcb->pagedir, t->user_stack);
+  palloc_free_page(t->kpage);
+
+  //TODO notify waiters
+  //TODO notify all joined 
+  thread_exit();
+
+}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
@@ -1178,4 +1200,7 @@ void pthread_exit(void) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {}
+void pthread_exit_main(void) {
+
+  thread_exit();
+}

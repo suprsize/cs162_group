@@ -481,6 +481,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->status = THREAD_BLOCKED;
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t*)t + PGSIZE;
+  t->user_stack = NULL;
+  t->kpage = NULL;
   t->priority = priority;
   t->e_priority = priority;
   t->pcb = NULL;
