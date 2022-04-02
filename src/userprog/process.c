@@ -1211,10 +1211,10 @@ tid_t pthread_join(tid_t tid UNUSED) {
 void pthread_exit(void) {
   struct thread* t;
   t = thread_current();
+
   //TODO NEED TO CHECK FOR MAIN EXIT
-    printf("hello \n");
-    if (t->pcb->main_thread == t) {
-      pthread_exit_main();
+  if (t->pcb->main_thread == t) {
+    pthread_exit_main();
   }
   pagedir_clear_page(t->pcb->pagedir, t->user_stack);
 
@@ -1239,12 +1239,16 @@ void pthread_exit_main(void) {
     struct list* retvals = &t->pcb->threads_retvals;
     struct list_elem* e = NULL;
     struct thread_retval* retval;
-    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
-        retval = list_entry(e, struct thread_retval, elem);
-        if (retval->tid != t->tid) {
-            pthread_join(retval->tid);
-        }
+
+    while (!list_empty(retvals)) {
+      e = list_pop_front(retvals);
+      retval = list_entry(e, struct thread_retval, elem);
+      if (retval->tid != t->tid) {
+          pthread_join(retval->tid);
+      }
     }
+
     //TODO: make sure to free our own retval from the list
-    thread_exit();
+    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, 0);
+    process_exit(0);
 }
