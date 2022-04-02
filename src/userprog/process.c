@@ -648,11 +648,12 @@ void process_exit(int exit_code) {
     if (retval->tid != cur->tid) {
         pthread_join(retval->tid);
     } else {
-      sema_up(&cur->retval->join_sema);
       if (lock_try_acquire(&cur->retval->join_lock)) {
         list_remove(&cur->retval->elem);
         //lock_release(&t->retval->join_lock);
         free(cur->retval);
+      } else {
+          sema_up(&cur->retval->join_sema);
       }
     }
   }

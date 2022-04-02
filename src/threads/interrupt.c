@@ -334,6 +334,13 @@ void intr_handler(struct intr_frame* frame) {
     yield_on_return = false;
   }
 
+    /* Ensures all user threads call pthread_exit if PCB is set to exit. */
+    struct thread* t;
+    t = thread_current();
+    if (is_trap_from_userspace(frame) && t->pcb->exit) {
+        pthread_exit();
+    }
+
   /* Invoke the interrupt's handler. */
   handler = intr_handlers[frame->vec_no];
   if (handler != NULL)
@@ -357,12 +364,7 @@ void intr_handler(struct intr_frame* frame) {
       thread_yield();
   }
 
-  /* Ensures all user threads call pthread_exit if PCB is set to exit. */
-  struct thread* t;
-  t = thread_current();
-  if (is_trap_from_userspace(frame) && t->pcb->exit) {
-    pthread_exit();
-  }
+
 }
 
 /* Handles an unexpected interrupt with interrupt frame F.  An
