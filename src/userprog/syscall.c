@@ -57,6 +57,14 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
                          }
 
     case SYS_PT_JOIN : {
+
+      if (!is_valid_args(args, 2)
+          || !is_valid_ptr(args[1])) {
+        invalid_ptr = true;
+        break;
+      }
+
+      f->eax = pthread_join(args[1]);
       break;
                          }
 

@@ -8,6 +8,7 @@
 #include "threads/io.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/gdt.h"
@@ -354,6 +355,11 @@ void intr_handler(struct intr_frame* frame) {
 
     if (yield_on_return)
       thread_yield();
+  }
+
+  /* Ensures all user threads call pthread_exit if PCB is set to exit. */
+  if (is_trap_from_userspace(frame) && thread_current()->pcb->exit) {
+    pthread_exit();
   }
 }
 

@@ -88,8 +88,9 @@ bool populate_pcb(struct process* pcb) {
 
   pcb->pagedir = NULL;
 
-  /* fd codes 0 to 2 are reserved. */
   pcb->main_thread = t;
+
+  pcb->exit = false;
 
   // initialize the file descriptor table
   list_init(&(t->pcb->file_descriptors));
@@ -97,6 +98,7 @@ bool populate_pcb(struct process* pcb) {
   // initialize the global lock of filesys calls
   lock_init(&t->pcb->filesys_lock);
 
+  /* fd codes 0 to 2 are reserved. */
   pcb->fd_index = 2;
 
   // TODO free everything below on exit.
@@ -113,13 +115,15 @@ bool populate_pcb(struct process* pcb) {
   list_init(&(pcb->children));
   list_init(&(pcb->threads_retvals));
 
-    struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
-    new_thread_retval->tid = thread_current()->tid;
-    lock_init(&new_thread_retval->join_lock);
-    sema_init(&new_thread_retval->join_sema, 0);
-    t->retval = new_thread_retval;
-    list_push_back(&pcb->threads_retvals, &new_thread_retval->elem);
-    return true;
+  /* Initialize and add in the thread retval. */
+  struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
+  new_thread_retval->tid = thread_current()->tid;
+  lock_init(&new_thread_retval->join_lock);
+  sema_init(&new_thread_retval->join_sema, 0);
+  t->retval = new_thread_retval;
+  list_push_back(&pcb->threads_retvals, &new_thread_retval->elem);
+
+  return true;
 }
 
 /* Initializes user programs in the system by ensuring the main
@@ -624,23 +628,20 @@ void process_exit(int exit_code) {
   struct list* children_retvals;
   uint32_t* pd;
 
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
     NOT_REACHED();
   }
 
+  // TODO we may need a lock on this.
+  cur->pcb->exit = true;
+
   /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
   list_remove(&(cur->pcb->elem));
   lock_release(&(pcb_list_lock));
-
-//  // TODO: free the file descriptor table
-//  // remove the elements from the fd list
-//  while(!list_empty(&cur->pcb->file_descriptors)) {
-//    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
-//    // free(list_entry(e, struct file, elem));
-//  }
 
   // TODO: free the file descriptor table
   // remove the elements from the fd list
@@ -675,7 +676,6 @@ void process_exit(int exit_code) {
   /* Decrease ref count of all children retvals.
    * Free if neccesary. */
 
-  // TODO is this how we free a list ?
   struct list_elem* e;
   children_retvals = &(cur->pcb->children);
   for (e = list_begin(children_retvals); e != list_end(children_retvals);
@@ -716,7 +716,6 @@ void process_exit(int exit_code) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-//  sema_up(&temporary); // TODO: Need to replace temporary - James
   thread_exit();
 }
 
@@ -1177,12 +1176,13 @@ static void start_pthread(void* aux) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) {
+tid_t pthread_join(tid_t tid) {
     struct thread* t = thread_current();
     struct list* retvals = &t->pcb->threads_retvals;
     struct list_elem* e = NULL;
     bool found = false;
     struct thread_retval* retval;
+    
     for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
         retval = list_entry(e, struct thread_retval, elem);
         if (retval->tid == tid) {
@@ -1190,12 +1190,14 @@ tid_t pthread_join(tid_t tid UNUSED) {
             break;
         }
     }
+
     if (!found) {
         return TID_ERROR;
     }
+
     sema_down(&retval->join_sema);
     list_remove(&retval->elem);
-    lock_release(&retval->join_lock);
+    //lock_release(&retval->join_lock);
     free(retval);
 }
 
@@ -1218,8 +1220,17 @@ void pthread_exit(void) {
   }
   pagedir_clear_page(t->pcb->pagedir, t->user_stack);
 
-//  palloc_free_page(t->kpage);
-  sema_up(&t->retval->join_sema);   // notify the waiters
+  // palloc_free_page(t->kpage);
+
+  /* Free our own retval struct if no one else holds it. */
+  if (lock_try_acquire(&t->retval->join_lock)) {
+    list_remove(&t->retval->elem);
+    //lock_release(&t->retval->join_lock);
+    free(t->retval);
+  } else {
+    sema_up(&t->retval->join_sema);   // notify the waiters
+  }
+
   thread_exit();
 }
 
@@ -1235,7 +1246,15 @@ void pthread_exit_main(void) {
     struct thread* t;
     t = thread_current();
     // TODO: double check resource freeing
-    sema_up(&t->retval->join_sema);   // notify the waiters
+
+    if (lock_try_acquire(&t->retval->join_lock)) {
+      list_remove(&t->retval->elem);
+      //lock_release(&t->retval->join_lock);
+      free(t->retval);
+    } else {
+      sema_up(&t->retval->join_sema);   // notify the waiters
+    }
+
     struct list* retvals = &t->pcb->threads_retvals;
     struct list_elem* e = NULL;
     struct thread_retval* retval;
@@ -1248,7 +1267,7 @@ void pthread_exit_main(void) {
       }
     }
 
-    //TODO: make sure to free our own retval from the list
+
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, 0);
     process_exit(0);
 }
