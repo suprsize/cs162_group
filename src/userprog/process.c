@@ -111,8 +111,13 @@ bool populate_pcb(struct process* pcb) {
   /* Initializes the list of file descriptors and children retvals. */
   list_init(&(pcb->file_descriptors));
   list_init(&(pcb->children));
-
-  return true;
+  list_init(&(pcb->threads_retvals));
+    struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
+    new_thread_retval->tid = thread_current()->tid;
+    lock_init(&new_thread_retval->join_lock);
+    sema_init(&new_thread_retval->join_sema, 0);
+    list_push_back(&pcb->threads_retvals, &new_thread_retval->elem);
+    return true;
 }
 
 /* Initializes user programs in the system by ensuring the main
@@ -1125,7 +1130,13 @@ static void start_pthread(void* aux) {
   s_args = (struct start_pthread_args *) aux;
 
   thread_current()->pcb = s_args->daddy;
-  process_activate();
+    struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
+    new_thread_retval->tid = thread_current()->tid;
+    lock_init(&new_thread_retval->join_lock);
+    sema_init(&new_thread_retval->join_sema, 0);
+    list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
+
+    process_activate();
 
     memset(&if_, 0, sizeof if_);
     fpu_init_new(&if_.fpu, &fpu_cur);
@@ -1142,8 +1153,8 @@ static void start_pthread(void* aux) {
   }
 
   if_.esp = stack;
-
   if_.eip = s_args->sf;
+
 
   /* Notify pthread_execute that we're good! */
   sema_up(&s_args->stack_ready);
@@ -1164,7 +1175,27 @@ static void start_pthread(void* aux) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) { return -1; }
+tid_t pthread_join(tid_t tid UNUSED) {
+    struct thread* t = thread_current();
+    struct list* retvals = &t->pcb->threads_retvals;
+    struct list_elem* e = NULL;
+    bool found = false;
+    struct thread_retval* retval;
+    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
+        retval = list_entry(e, struct thread_retval, elem);
+        if (retval->tid == tid) {
+            found = lock_try_acquire(&retval->join_lock);
+            break;
+        }
+    }
+    if (!found) {
+        return TID_ERROR;
+    }
+    sema_down(&retval->join_sema);
+    list_remove(&retval->elem);
+    lock_release(&retval->join_lock);
+    free(retval);
+}
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the

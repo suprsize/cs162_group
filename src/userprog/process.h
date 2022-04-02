@@ -60,7 +60,7 @@ struct process {
   int fd_index;               /* Index of newest file descriptor. */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
-
+  struct list threads_retvals;
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
   struct list_elem elem; /* List element so parent can keep track of stuff. */
