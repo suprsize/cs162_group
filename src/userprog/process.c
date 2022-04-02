@@ -1053,26 +1053,20 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
     return false;
   }
 
-  while (pagedir_get_page(thread_current()->pcb->pagedir, esp_l) != NULL
-      || pagedir_get_page(kpage, esp_l) != NULL) {
+  while (pagedir_get_page(thread_current()->pcb->pagedir, esp_l) != NULL) {
     esp_l = ((uint8_t *) esp_l) - PGSIZE;
   }
 
-  if (!install_page(esp_l, kpage, true)) {
+  if (!install_page(esp_l - PGSIZE, kpage, true)) {
     palloc_free_page(kpage);
     return false;
   }
-
-  void* NULL_TERMINATOR = 0x0;
-  memcpy(esp_l, NULL_TERMINATOR, sizeof(void *));
-  esp_l -= sizeof(void*);
-
-  memcpy(esp_l, *eip, sizeof(void *));
   esp_l -= sizeof(void *);
-
-  memcpy(esp_l, tf, sizeof(void *));
+  memcpy((void*) esp_l, &arg, sizeof(void*));
   esp_l -= sizeof(void *);
-
+  memcpy(esp_l, &tf, sizeof(void*));
+  esp_l -= sizeof(void *);
+  *esp = (void*) esp_l;
   return true;
 }
 
@@ -1125,6 +1119,13 @@ static void start_pthread(void* aux) {
   s_args = (struct start_pthread_args *) aux;
 
   thread_current()->pcb = s_args->daddy;
+  process_activate();
+
+    memset(&if_, 0, sizeof if_);
+    fpu_init_new(&if_.fpu, &fpu_cur);
+    if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+    if_.cs = SEL_UCSEG;
+    if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Setup the stack */
   // bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
@@ -1134,16 +1135,8 @@ static void start_pthread(void* aux) {
     return;
   }
 
-  eip = s_args->sf;
-
-  memset(&if_, 0, sizeof if_);
-  fpu_init_new(&if_.fpu, &fpu_cur);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-
   if_.esp = stack;
-  if_.eip = eip;
+  if_.eip = s_args->sf;
 
   /* Notify pthread_execute that we're good! */
   sema_up(&s_args->stack_ready);
