@@ -628,7 +628,6 @@ void process_exit(int exit_code) {
   struct list* children_retvals;
   uint32_t* pd;
 
-
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -638,11 +637,8 @@ void process_exit(int exit_code) {
   // TODO we may need a lock on this.
   cur->pcb->exit = true;
 
-  // TODO wait for all other threads to die.
-  
 
-
-
+  // TODO wait for all other threads to die. Free their struct retvals.
   /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
   list_remove(&(cur->pcb->elem));
@@ -1226,20 +1222,14 @@ void pthread_exit(void) {
   //TODO NEED TO CHECK FOR MAIN EXIT
   if (t->pcb->main_thread == t) {
     pthread_exit_main();
+    return;
   }
   pagedir_clear_page(t->pcb->pagedir, t->user_stack);
 
   // palloc_free_page(t->kpage);
 
   /* Free our own retval struct if no one else holds it. */
-  if (lock_try_acquire(&t->retval->join_lock)) {
-    list_remove(&t->retval->elem);
-    //lock_release(&t->retval->join_lock);
-    free(t->retval);
-  } else {
-    sema_up(&t->retval->join_sema);   // notify the waiters
-  }
-
+  sema_up(&t->retval->join_sema);   // notify the waiters
   thread_exit();
 }
 
@@ -1275,7 +1265,6 @@ void pthread_exit_main(void) {
           pthread_join(retval->tid);
       }
     }
-
 
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, 0);
     process_exit(0);
