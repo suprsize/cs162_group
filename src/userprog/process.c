@@ -112,10 +112,12 @@ bool populate_pcb(struct process* pcb) {
   list_init(&(pcb->file_descriptors));
   list_init(&(pcb->children));
   list_init(&(pcb->threads_retvals));
+
     struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
     new_thread_retval->tid = thread_current()->tid;
     lock_init(&new_thread_retval->join_lock);
     sema_init(&new_thread_retval->join_sema, 0);
+    t->retval = new_thread_retval;
     list_push_back(&pcb->threads_retvals, &new_thread_retval->elem);
     return true;
 }
@@ -1135,7 +1137,7 @@ static void start_pthread(void* aux) {
     lock_init(&new_thread_retval->join_lock);
     sema_init(&new_thread_retval->join_sema, 0);
     list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
-
+    thread_current()->retval = new_thread_retval;
     process_activate();
 
     memset(&if_, 0, sizeof if_);
@@ -1208,19 +1210,17 @@ tid_t pthread_join(tid_t tid UNUSED) {
    now, it does nothing. */
 void pthread_exit(void) {
   struct thread* t;
-
   t = thread_current();
-
-  if (t->pcb->main_thread == t) {
-    pthread_exit_main();
+  //TODO NEED TO CHECK FOR MAIN EXIT
+    printf("hello \n");
+    if (t->pcb->main_thread == t) {
+      pthread_exit_main();
   }
   pagedir_clear_page(t->pcb->pagedir, t->user_stack);
-  palloc_free_page(t->kpage);
 
-  //TODO notify waiters
-  //TODO notify all joined 
+//  palloc_free_page(t->kpage);
+  sema_up(&t->retval->join_sema);   // notify the waiters
   thread_exit();
-
 }
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
@@ -1232,6 +1232,19 @@ void pthread_exit(void) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 void pthread_exit_main(void) {
-
-  thread_exit();
+    struct thread* t;
+    t = thread_current();
+    // TODO: double check resource freeing
+    sema_up(&t->retval->join_sema);   // notify the waiters
+    struct list* retvals = &t->pcb->threads_retvals;
+    struct list_elem* e = NULL;
+    struct thread_retval* retval;
+    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
+        retval = list_entry(e, struct thread_retval, elem);
+        if (retval->tid != t->tid) {
+            pthread_join(retval->tid);
+        }
+    }
+    //TODO: make sure to free our own retval from the list
+    thread_exit();
 }

@@ -87,14 +87,14 @@ struct thread {
   enum thread_status status; /* Thread state. */
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
-  uint8_t* user_stack;        /* The user stack. */
+  uint8_t* user_stack;       /* The user stack. */
   uint8_t* kpage;            /* The kernel page for stack mapping. */
   int priority;              /* Priority. */
-  int e_priority;              /* effective priority. */
+  int e_priority;            /* effective priority. */
   struct list_elem allelem;  /* List element for all threads list. */
-  struct list p_donors; /* List of locks that we're being donated to. */
-
-  /* Shared between thread.c and synch.c. */
+  struct list p_donors;      /* List of locks that we're being donated to. */
+  struct thread_retval* retval;      /* Used to notify the all the joiners of the thread */
+    /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
   struct semaphore pstack_ready; /* Used to notify parent thread that user stack is ready. */

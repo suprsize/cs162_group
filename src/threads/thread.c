@@ -490,7 +490,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   sema_init(& (t->pcb_ready), 0);
   sema_init(& (t->pstack_ready), 0);
   list_init(& (t->p_donors));
-
+  t->retval = NULL;
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
