@@ -358,7 +358,9 @@ void intr_handler(struct intr_frame* frame) {
   }
 
   /* Ensures all user threads call pthread_exit if PCB is set to exit. */
-  if (is_trap_from_userspace(frame) && thread_current()->pcb->exit) {
+  struct thread* t;
+  t = thread_current();
+  if (is_trap_from_userspace(frame) && t->pcb->exit) {
     pthread_exit();
   }
 }

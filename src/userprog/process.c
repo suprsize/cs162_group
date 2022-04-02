@@ -634,8 +634,28 @@ void process_exit(int exit_code) {
     NOT_REACHED();
   }
 
-  // TODO we may need a lock on this.
   cur->pcb->exit = true;
+
+  struct list* retvals = &cur->pcb->threads_retvals;
+
+
+  struct list_elem* e_r = NULL;
+  struct thread_retval* retval;
+
+  while (!list_empty(retvals)) {
+    e_r = list_front(retvals);
+    retval = list_entry(e_r, struct thread_retval, elem);
+    if (retval->tid != cur->tid) {
+        pthread_join(retval->tid);
+    } else {
+      sema_up(&cur->retval->join_sema);
+      if (lock_try_acquire(&cur->retval->join_lock)) {
+        list_remove(&cur->retval->elem);
+        //lock_release(&t->retval->join_lock);
+        free(cur->retval);
+      }
+    }
+  }
 
 
   // TODO wait for all other threads to die. Free their struct retvals.
@@ -716,6 +736,7 @@ void process_exit(int exit_code) {
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
   free(pcb_to_free);
+
 
   thread_exit();
 }
@@ -1204,6 +1225,7 @@ tid_t pthread_join(tid_t tid) {
     list_remove(&retval->elem);
     //lock_release(&retval->join_lock);
     free(retval);
+
 }
 
 /* Free the current thread's resources. Most resources will
