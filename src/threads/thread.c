@@ -317,17 +317,22 @@ void thread_exit(void) {
   list_remove(&current->allelem);
   // list_remove(&thread_current()->elem);
 
+  /*
   if (&current->waiter_elem) {
     list_remove(&current->waiter_elem);
   }
+  */
 
-  // struct lock *lock = current->waiting_on;
+   struct lock *lock = current->waiting_on;
 
-  // for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
-  //   if (current->tid == list_entry(e, struct thread, waiter_elem)->tid) {
-  //     list_remove(e);
-  //   }
-  // }
+   if (lock != NULL) {
+   for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
+     if (current->tid == list_entry(e, struct thread, waiter_elem)->tid) {
+       list_remove(e);
+       break;
+     }
+    }
+   }
 
   thread_current()->status = THREAD_DYING;
   schedule();
