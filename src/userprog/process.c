@@ -658,6 +658,7 @@ void process_exit(int exit_code) {
     while (!list_empty(retvals)) {
         e = list_pop_front(retvals);
         retval = list_entry(e, struct thread_retval, elem);
+        lock_release(&join_lock);
         free(retval);
     }
 
