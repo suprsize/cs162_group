@@ -14,7 +14,7 @@ static void page_fault(struct intr_frame*);
 
 /* Exits the process with error code -1. */
 void exit_with_error() {
-  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+//  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
   process_exit(-1);
 }
 

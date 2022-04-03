@@ -634,14 +634,26 @@ void process_exit(int exit_code) {
     thread_exit();
     NOT_REACHED();
   }
-
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, exit_code);
   cur->pcb->exit = true;
   struct retval* proc_retval = cur->pcb->retval;
   struct list* children_retvals;
   struct list* retvals = &cur->pcb->threads_retvals;
 
-  struct list_elem* e_r = NULL;
+  struct list_elem* e = NULL;
   struct thread_retval* retval;
+    sema_up(&cur->retval->join_sema);
+    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
+        retval = list_entry(e, struct thread_retval, elem);
+        if (retval->tid != cur->tid) {
+            if (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
+                while (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
+                    thread_yield();
+                }
+            }
+            pthread_join(retval->tid);
+        }
+    }
 
 
   // TODO wait for all other threads to die. Free their struct retvals.
@@ -683,7 +695,7 @@ void process_exit(int exit_code) {
   /* Decrease ref count of all children retvals.
    * Free if neccesary. */
 
-  struct list_elem* e;
+//  struct list_elem* e;
   children_retvals = &(cur->pcb->children);
   for (e = list_begin(children_retvals); e != list_end(children_retvals);
       e = list_next(e)) {
@@ -1268,8 +1280,6 @@ void pthread_exit_main(void) {
                 pthread_join(retval->tid);
             }
         }
-
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, 0);
     }
     process_exit(0);
 }
