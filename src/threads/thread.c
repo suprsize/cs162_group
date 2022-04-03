@@ -312,7 +312,11 @@ void thread_exit(void) {
      when it calls thread_switch_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
-  thread_current()->retval->is_exited = true;
+
+  if (thread_current()->retval != NULL) {
+    thread_current()->retval->is_exited = true;
+  }
+
   // list_remove(&thread_current()->elem);
   thread_current()->status = THREAD_DYING;
   schedule();
