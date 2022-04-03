@@ -1221,8 +1221,12 @@ tid_t pthread_join(tid_t tid) {
     } else if (retval->is_terminated) {
         lock_release(&retval->join_lock);
         return TID_ERROR;
+    } else if (retval->is_exited) {
+        lock_release(&retval->join_lock);
+        retval->is_terminated = true;
+        return retval->tid;
     }
-//TODO: NEED TO FREE RETVAL IN PROCESS_EXIT
+
     sema_down(&retval->join_sema);
     retval->is_terminated = true;
     lock_release(&retval->join_lock);

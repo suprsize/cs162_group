@@ -540,13 +540,14 @@ struct thread* next_schedule_prio(struct list* lst) {
       highest_priority = _priority;
     }
   }
+
   return retval;
 }
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   struct thread* to_run = next_schedule_prio(&prio_ready_list);
-  list_remove(&(to_run->elem));
+  list_remove(&to_run->elem);
   return to_run;
 }
 
