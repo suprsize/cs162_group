@@ -305,24 +305,45 @@ void lock_release(struct lock* lock) {
   int old_prio = current->e_priority;
 
   /* If effective priority is not base priority, find max(base, other donations) */
-  for (struct list_elem *e = list_begin(&current->locks); e != list_end(&current->locks); e = list_next(e)) {
-    struct lock *l = list_entry(e, struct lock, elem);
 
-    // Remove this lock from this thread's list of owned locks
-    if (lock == l) {
-      list_remove(e); 
-      continue;
-    }
+  struct list_elem *e;
+  
+  e = list_begin(&current->locks);
+  while(e != list_end(&current->locks)) {
+    if (lock == list_entry(e, struct lock, elem)) {
+      list_remove(e); break;
+    } e = list_next(e);
+  }
 
-    for (struct list_elem *i = list_begin(&l->waiters); i != list_end(&l->waiters); i = list_next(i)) {
+  e = list_begin(&current->locks);
+  while(e != list_end(&current->locks)) {
+    struct lock *lck = list_entry(e, struct lock, elem);
+  
+    for (struct list_elem *i = list_begin(&lck->waiters); i != list_end(&lck->waiters); i = list_next(i)) {
       struct thread *t = list_entry(i, struct thread, waiter_elem);
 
-      // The new effective priority is the max of (base, other's effective priorities waiting on us)
-      if (t->e_priority > new_prio) {
+      if (new_prio < t->e_priority) {
         new_prio = t->e_priority;
       }
     }
+
+    e = list_next(e);
   }
+
+
+
+  // for (struct list_elem *e = list_begin(&current->locks); e != list_end(&current->locks); e = list_next(e)) {
+  //   struct lock *l = list_entry(e, struct lock, elem);
+
+  //   for (struct list_elem *i = list_begin(&l->waiters); i != list_end(&l->waiters); i = list_next(i)) {
+  //     struct thread *t = list_entry(i, struct thread, waiter_elem);
+
+  //     // The new effective priority is the max of (base, other's effective priorities waiting on us)
+  //     if (t->e_priority > new_prio) {
+  //       new_prio = t->e_priority;
+  //     }
+  //   }
+  // }
 
   current->e_priority = new_prio;
 
