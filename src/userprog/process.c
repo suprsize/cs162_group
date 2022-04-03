@@ -1085,12 +1085,12 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
     esp_l = ((uint8_t *) esp_l) - PGSIZE;
   }
 
-  if (!install_page(esp_l - PGSIZE, kpage, true)) {
+  if (!install_page(esp_l, kpage, true)) {
     palloc_free_page(kpage);
     return false;
   }
-
   t->user_stack = esp_l;
+  esp_l += PGSIZE;
   t->kpage = kpage;
 
   esp_l -= sizeof(void *);
@@ -1221,12 +1221,17 @@ tid_t pthread_join(tid_t tid) {
     } else if (retval->is_terminated) {
         lock_release(&retval->join_lock);
         return TID_ERROR;
+    } else if (retval->is_exited) {
+        lock_release(&retval->join_lock);
+        return tid;
+    } else {
+        sema_down(&retval->join_sema);
+        retval->is_terminated = true;
+        lock_release(&retval->join_lock);
+        return tid;
     }
 //TODO: NEED TO FREE RETVAL IN PROCESS_EXIT
-    sema_down(&retval->join_sema);
-    retval->is_terminated = true;
-    lock_release(&retval->join_lock);
-    return tid;
+
 }
 
 /* Free the current thread's resources. Most resources will
