@@ -91,10 +91,16 @@ struct thread {
   uint8_t* kpage;            /* The kernel page for stack mapping. */
   int priority;              /* Priority. */
   int e_priority;            /* effective priority. */
-  struct list_elem allelem;  /* List element for all threads list. */
-  struct list p_donors;      /* List of locks that we're being donated to. */
   struct thread_retval* retval;      /* Used to notify the all the joiners of the thread */
-    /* Shared between thread.c and synch.c. */
+  struct list_elem allelem;  /* List element for all threads list. */
+  struct list locks;         /* List of locks we're holding. */
+  struct list_elem waiter_elem; /* List of waiters in lock. */
+
+  int alarm_time;       /* Store information for when the thread can wake up. */
+
+  struct lock *waiting_on;   /* Store which lock we are waiting on. */
+
+  /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
   struct semaphore pstack_ready; /* Used to notify parent thread that user stack is ready. */
