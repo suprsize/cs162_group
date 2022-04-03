@@ -366,30 +366,15 @@ struct thread* thread_get(tid_t tid) {
 void thread_set_priority(int new_priority) {
 
   enum intr_level old_level = intr_disable();
-
   struct thread *current_thread = thread_current();
 
   current_thread->priority = new_priority;
 
   if (current_thread->e_priority < new_priority || list_empty(&current_thread->locks)) {
     current_thread->e_priority = new_priority;
-
-    // maybe just ignore the second half and preempt here with thread_yield
-    // then have the scheduler sort out which thread now has highest priority..
-    thread_yield();
+    thread_yield(); // Let the scheduler handle priority changes :P
   }
 
-  /*int highest_priority = current_thread->e_priority;
-  for (struct list_elem *e = list_begin(&prio_ready_list);
-    e != list_end(&prio_ready_list); e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, elem);
-    if (t->e_priority > highest_priority) {
-      highest_priority = t->e_priority;
-    }
-  }
-  if (highest_priority > current_thread->e_priority) {
-    thread_yield();
-  }*/
   intr_set_level(old_level);
 }
 
@@ -494,8 +479,13 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->stack = (uint8_t*)t + PGSIZE;
   t->priority = priority;
   t->e_priority = priority;
+
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+
+  t->alarm_time = 0;
+  t->waiting_on = NULL;
+  
   sema_init(& (t->pcb_ready), 0);
   list_init(& (t->locks));
 

@@ -197,6 +197,7 @@ void lock_init(struct lock* lock) {
   ASSERT(lock != NULL);
 
   lock->holder = NULL;
+  list_init(&lock->waiters);
   sema_init(&lock->semaphore, 1);
 }
 
@@ -228,7 +229,7 @@ void lock_acquire (struct lock* lock) {
   struct thread* current = thread_current();
 
   if (lock->holder != NULL) {
-    current_thread->waiting_on = lock;
+    current->waiting_on = lock;
     list_push_back(&lock->waiters, &current->waiter_elem);
     struct lock *lock_ptr = lock;
     struct thread *lock_holder;
@@ -239,17 +240,26 @@ void lock_acquire (struct lock* lock) {
       // Might be redundant to check.. since current thread should already be the highest,
       // .. but maybe there is a sleeping thread that has higher priority that is also 
       // holding our lock
+
       if (lock_holder->e_priority < current->e_priority) {
         lock_holder->e_priority = current->e_priority;
         lock_ptr = lock_holder->waiting_on;
-        continue;
-      } 
-      break;
+      } else break;
     }
   }
 
   sema_down(&lock->semaphore);
-  list_remove(&current->waiter_elem);
+
+  for (struct list_elem *e = list_begin(&lock->waiters);
+    e != list_end(&lock->waiters); e = list_next(e)) {
+
+    if (current == list_entry(e, struct thread, waiter_elem)) {
+      list_remove(e); 
+      break;
+    } 
+  }
+
+  //list_remove(&current->waiter_elem);
   lock->holder = thread_current();
   list_push_back(&current->locks, &lock->elem);
   intr_set_level(old_level);
@@ -291,30 +301,40 @@ void lock_release(struct lock* lock) {
   enum intr_level old_level;
   old_level = intr_disable();
   struct thread* current = thread_current(); 
-  struct thread *t;
-  int max_prio = current->priority;
+  int new_prio = current->priority;
+  int old_prio = current->e_priority;
 
-  /* If effective priority is not base priority, revert to max(base, other donations) */
+  /* If effective priority is not base priority, find max(base, other donations) */
   for (struct list_elem *e = list_begin(&current->locks); e != list_end(&current->locks); e = list_next(e)) {
-    if (lock == list_entry(e, struct lock, elem)) {
+    struct lock *l = list_entry(e, struct lock, elem);
+
+    // Remove this lock from this thread's list of owned locks
+    if (lock == l) {
       list_remove(e); 
-      break;
-    } 
-  }
-  for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
-    t = list_entry(e, struct thread, waiters_elem);
-    if (t->e_priority > max_prio) {
-      max_prio = t->e_priority;
+      continue;
+    }
+
+    for (struct list_elem *i = list_begin(&l->waiters); i != list_end(&l->waiters); i = list_next(i)) {
+      struct thread *t = list_entry(i, struct thread, waiter_elem);
+
+      // The new effective priority is the max of (base, other's effective priorities waiting on us)
+      if (t->e_priority > new_prio) {
+        new_prio = t->e_priority;
+      }
     }
   }
-  current->e_priority = max_prio;
+
+  current->e_priority = new_prio;
 
   /* Release lock. */
   lock->holder = NULL;
   sema_up(&lock->semaphore);
 
   intr_set_level(old_level);
-  thread_yield();
+
+  if (old_level == INTR_ON && current->e_priority < old_prio) {
+    thread_yield();
+  }
 }
 
 /* Returns true if the current thread holds LOCK, false
