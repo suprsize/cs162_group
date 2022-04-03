@@ -1231,7 +1231,6 @@ tid_t pthread_join(tid_t tid) {
         return tid;
     }
 //TODO: NEED TO FREE RETVAL IN PROCESS_EXIT
-
 }
 
 /* Free the current thread's resources. Most resources will
