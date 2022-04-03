@@ -120,6 +120,7 @@ bool populate_pcb(struct process* pcb) {
   struct thread_retval* new_thread_retval = malloc(sizeof(struct thread_retval));
   new_thread_retval->tid = thread_current()->tid;
   new_thread_retval->is_terminated = false;
+  new_thread_retval->is_exited = false;
   lock_init(&new_thread_retval->join_lock);
   sema_init(&new_thread_retval->join_sema, 0);
   t->retval = new_thread_retval;
@@ -642,22 +643,6 @@ void process_exit(int exit_code) {
   struct list_elem* e_r = NULL;
   struct thread_retval* retval;
 
-//  while (!list_empty(retvals)) {
-//    e_r = list_front(retvals);
-//    retval = list_entry(e_r, struct thread_retval, elem);
-//    if (retval->tid != cur->tid) {
-//        pthread_join(retval->tid);
-//    } else {
-//      if (lock_try_acquire(&cur->retval->join_lock)) {
-//        list_remove(&cur->retval->elem);
-//        //lock_release(&t->retval->join_lock);
-//        free(cur->retval);
-//      } else {
-//          sema_up(&cur->retval->join_sema);
-//      }
-//    }
-//  }
-
 
   // TODO wait for all other threads to die. Free their struct retvals.
   /* Remove the PCB from the list of PCBs. */
@@ -1161,6 +1146,7 @@ static void start_pthread(void* aux) {
   lock_init(&new_thread_retval->join_lock);
   sema_init(&new_thread_retval->join_sema, 0);
   new_thread_retval->is_terminated = false;
+  new_thread_retval->is_exited = false;
   list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
   thread_current()->retval = new_thread_retval;
 
