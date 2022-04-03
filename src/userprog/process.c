@@ -654,6 +654,12 @@ void process_exit(int exit_code) {
             pthread_join(retval->tid);
         }
     }
+    // MIGHT GIVE ERROR.
+    while (!list_empty(retvals)) {
+        e = list_pop_front(retvals);
+        retval = list_entry(e, struct thread_retval, elem);
+        free(retval);
+    }
 
 
   // TODO wait for all other threads to die. Free their struct retvals.
@@ -1252,7 +1258,7 @@ void pthread_exit(void) {
     return;
   }
   pagedir_clear_page(t->pcb->pagedir, t->user_stack);
-  // palloc_free_page(t->kpage);
+  palloc_free_page(t->kpage);
 
   /* Free our own retval struct if no one else holds it. */
   sema_up(&t->retval->join_sema);   // notify the waiters
