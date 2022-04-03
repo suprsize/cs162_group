@@ -59,6 +59,7 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   int fd_index;               /* Index of newest file descriptor. */
   bool exit;                  /* Tells all threads to seize immediately. */
+  struct lock exit_lock;           /* Look for exit status */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
   struct list threads_retvals;

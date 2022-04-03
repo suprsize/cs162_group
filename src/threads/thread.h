@@ -112,6 +112,7 @@ struct thread {
 
 struct thread_retval {
   tid_t tid;
+  bool is_terminated;
   struct lock join_lock;
   struct semaphore join_sema;
   struct list_elem elem;
