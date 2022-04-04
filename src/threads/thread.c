@@ -311,25 +311,23 @@ void thread_exit(void) {
      and schedule another process.  That process will destroy us
      when it calls thread_switch_tail(). */
   intr_disable();
-  list_remove(&thread_current()->allelem);
+  struct thread *current = thread_current();
+  list_remove(&current->allelem);
 
   if (thread_current()->retval != NULL) {
     thread_current()->retval->is_exited = true;
   }
 
-  struct thread *current = thread_current();
-
-  list_remove(&current->allelem);
-
    struct lock *lock = current->waiting_on;
 
    if (lock != NULL) {
-   for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
-     if (current->tid == list_entry(e, struct thread, waiter_elem)->tid) {
-       list_remove(e);
-       break;
-     }
-    }
+     for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
+       struct thread *t = list_entry(e, struct thread, waiter_elem);
+       if (current->tid == t->tid) {
+         list_remove(e);
+         break;
+       }
+      }
    }
 
   thread_current()->status = THREAD_DYING;
