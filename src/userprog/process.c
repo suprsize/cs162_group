@@ -695,8 +695,10 @@ void process_exit(int exit_code) {
     while(!list_empty(&cur->pcb->lock_list)) {
         struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
         user_lock* user_lock_ptr = list_entry(e, user_lock, elem);
+        list_remove(&user_lock_ptr->elem);
         if (user_lock_ptr->kernel_lock != NULL) {
-//            lock_release(user_lock_ptr->kernel_lock); //might need to keep not release
+            if (user_lock_ptr->kernel_lock->holder == thread_current())
+              lock_release(&user_lock_ptr->kernel_lock); //might need to keep not release
             free(user_lock_ptr->kernel_lock);
         }
         free(user_lock_ptr);
@@ -706,6 +708,7 @@ void process_exit(int exit_code) {
     while(!list_empty(&cur->pcb->sema_list)) {
         struct list_elem *e = list_pop_front(&cur->pcb->sema_list);
         user_semaphore* user_sema_ptr = list_entry(e, user_semaphore, elem);
+        list_remove(&user_sema_ptr->elem);
         if (user_sema_ptr->kernel_semaphore != NULL) {
             free(user_sema_ptr->kernel_semaphore);
         }
@@ -775,6 +778,12 @@ void process_exit(int exit_code) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
+
+  if (thread_current()->waiting_on == &pcb_to_free->filesys_lock) {
+    thread_current()->waiting_on = NULL;
+  }
+
+
   free(pcb_to_free);
 
 
