@@ -294,7 +294,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        int fd = args[1];
        //TODO WE ARE HAVE TO FREEING THE FD TABLE WHEN PROCESS CLOSES.
        lock_acquire(file_lock);
-       close_file(fd);
+       if (close_file(fd) == -1) {
+         invalid_ptr = true;
+       }
        lock_release(file_lock);
        break;
      }

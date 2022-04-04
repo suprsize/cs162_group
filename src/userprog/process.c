@@ -393,7 +393,7 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
   return retval;
 }
 
-void close_file(int fd) {
+int close_file(int fd) {
   struct myFile* f = get_myFile(fd);
 
   if (f != NULL) {
@@ -402,8 +402,9 @@ void close_file(int fd) {
       // To indicate that the file descriptor has been close.
       f->file_ptr = NULL;
     }
+    return 1;
   } else {
-    exit_with_error();
+    return -1;
   }
 }
 
@@ -603,9 +604,11 @@ int process_wait(pid_t child_pid) {
   /* Remove the retval from the parent. */
   list_remove(&(child_retval->elem));
 
+
   if (child_retval->ref_cnt <= 0) {
+    lock_release(&(child_retval->ref_cnt_lock));
     free(child_retval);
-  } else {
+  }  else {
     lock_release(&(child_retval->ref_cnt_lock));
   }
 
@@ -663,6 +666,9 @@ void process_exit(int exit_code) {
     while (!list_empty(retvals)) {
         e = list_pop_front(retvals);
         retval = list_entry(e, struct thread_retval, elem);
+        if (lock_try_acquire(&retval->join_lock)) {
+          lock_release(&retval->join_lock);
+        }
         free(retval);
     }
 
@@ -719,10 +725,13 @@ void process_exit(int exit_code) {
 
   /* Free the retval struct if no one is waiting. */
   if (proc_retval->ref_cnt <= 0) {
+    lock_release(&(proc_retval->ref_cnt_lock));
+    // lock_release(&(proc_retval->wait_lock));
     free(proc_retval);
   } else {
     lock_release(&(proc_retval->ref_cnt_lock));
   }
+
 
   /* Decrease ref count of all children retvals.
    * Free if neccesary. */
@@ -737,8 +746,9 @@ void process_exit(int exit_code) {
     _retval->ref_cnt -= 1;
 
     if (_retval->ref_cnt <= 0) {
+      lock_release(&(_retval->ref_cnt_lock));
       free(_retval);
-    } else {
+    } else  {
       lock_release(&(_retval->ref_cnt_lock));
     }
   }

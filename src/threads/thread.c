@@ -311,13 +311,25 @@ void thread_exit(void) {
      and schedule another process.  That process will destroy us
      when it calls thread_switch_tail(). */
   intr_disable();
-  list_remove(&thread_current()->allelem);
+  struct thread *current = thread_current();
+  list_remove(&current->allelem);
 
   if (thread_current()->retval != NULL) {
     thread_current()->retval->is_exited = true;
   }
 
-  // list_remove(&thread_current()->elem);
+   struct lock *lock = current->waiting_on;
+
+   if (lock != NULL) {
+     for (struct list_elem *e = list_begin(&lock->waiters); e != list_end(&lock->waiters); e = list_next(e)) {
+       struct thread *t = list_entry(e, struct thread, waiter_elem);
+       if (current->tid == t->tid) {
+         list_remove(e);
+         break;
+       }
+      }
+   }
+
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -369,26 +381,23 @@ struct thread* thread_get(tid_t tid) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
-  thread_current()->priority = new_priority;
 
-  if (new_priority > thread_current()->e_priority 
-      || list_empty(&(thread_current()->p_donors))) {
-    thread_current()->e_priority = new_priority;
+  enum intr_level old_level = intr_disable();
+  struct thread *current_thread = thread_current();
+
+  current_thread->priority = new_priority;
+
+  if (current_thread->e_priority < new_priority || list_empty(&current_thread->locks)) {
+    current_thread->e_priority = new_priority;
+    thread_yield(); // Let the scheduler handle priority changes :P
   }
 
-  /* Yield if the current thread no longer has highest priority. */
-  struct thread* highest_t = next_schedule_prio(&prio_ready_list);
-  if(highest_t->e_priority > thread_current()->e_priority) {
-    thread_yield();
-  }
-
+  intr_set_level(old_level);
 }
 
-/* Returns the current thread's priority. */
+/* Returns the current thread's effective priority. */
 int thread_get_priority(void) {
-  if (thread_current()->priority < thread_current()->e_priority)
-    return thread_current()->e_priority;
-  return thread_current()->priority;
+  return thread_current()->e_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -490,12 +499,18 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->kpage = NULL;
   t->priority = priority;
   t->e_priority = priority;
+
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+
+  t->alarm_time = 0;
+  t->waiting_on = NULL;
+  
   sema_init(& (t->pcb_ready), 0);
   sema_init(& (t->pstack_ready), 0);
-  list_init(& (t->p_donors));
   t->retval = NULL;
+  list_init(& (t->locks));
+
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
