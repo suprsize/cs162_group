@@ -32,26 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-/* Lock manager for when user is allocated. */
-typedef struct user_lock {
-  struct lock* kernel_lock;
-  struct thread* holder;
-  struct thread* next_holder;
-  struct list wait_queue;
-  struct list_elem elem;
-  char* user_ptr;
-} user_lock;
-
-/* Semaphore manager for when user is allocated. */
-typedef struct user_semaphore {
-	struct semaphore* kernel_semaphore;
-	char* usr_ptr;	
-	struct thread* holder;	
-  struct thread* next_holder;
-  struct list wait_queue;
-  struct list_elem elem;
-} user_semaphore;
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -199,15 +179,6 @@ void lock_init(struct lock* lock) {
   sema_init(&lock->semaphore, 1);
 }
 
-bool user_lock_init(struct lock* lock) {
-  user_lock *userlock = malloc(sizeof(user_lock));
-  user_semaphore *usersemaphore = malloc(sizeof(user_semaphore));
-  if (userlock == NULL || usersemaphore == NULL) {
-    return false;
-  }
-  return true;
-}
-
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -225,11 +196,7 @@ void lock_acquire(struct lock* lock) {
   lock->holder = thread_current();
 }
 
-/* Acquires lock for user thread and includes lock priority donation. */
-void user_lock_acquire (struct lock* lock) {
-  sema_down(&lock->semaphore);
-  lock->holder = thread_current();
-}
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -262,11 +229,6 @@ void lock_release(struct lock* lock) {
   sema_up(&lock->semaphore);
 }
 
-/* Releases the lock for user threads and includes priority donation. */
-void user_lock_release (struct lock* lock) {
-  lock->holder = NULL;
-  sema_up(&lock->semaphore);
-}
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds

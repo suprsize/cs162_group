@@ -45,6 +45,20 @@ struct retval {
   struct list_elem elem; /* List element so parent can keep track of stuff. */
 };
 
+/* Lock manager for when user is allocated. */
+typedef struct user_lock {
+    struct lock* kernel_lock;
+    char* user_ptr;
+    struct list_elem elem;
+} user_lock;
+
+/* Semaphore manager for when user is allocated. */
+typedef struct user_semaphore {
+    struct semaphore* kernel_semaphore;
+    char* user_ptr;
+    struct list_elem elem;
+} user_semaphore;
+
 struct list pcb_list; /* A list of all processes */
 
 /* The process control block for a given process. Since
@@ -66,6 +80,8 @@ struct process {
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
   struct list_elem elem; /* List element so parent can keep track of stuff. */
+  struct list lock_list; /* List of all user_lock that have been initialized; */
+  struct list sema_list; /* List of all user_sema that have been initialized; */
 };
 
 void userprog_init(void);
@@ -84,5 +100,14 @@ tid_t pthread_execute(stub_fun, pthread_fun, void*);
 tid_t pthread_join(tid_t);
 void pthread_exit(void);
 void pthread_exit_main(void);
+
+bool user_sema_init(char *user_address, unsigned value);
+void user_sema_down(char *user_address);
+void user_sema_up(char *user_address);
+
+bool user_lock_init (char* user_address);
+void user_lock_acquire (char* user_address);
+void user_lock_release (char* user_address);
+
 
 #endif /* userprog/process.h */

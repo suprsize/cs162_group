@@ -1,9 +1,9 @@
+#include "userprog/process.h"
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/process.h"
 #include "userprog/exception.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
@@ -54,28 +54,81 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_PT_EXIT: {
       pthread_exit();
       break;
-                         }
+    }
 
     case SYS_LOCK_INIT: {
-      break;
-                         }
+        if (!is_valid_args(args, 1)
+            || !is_valid_ptr(args[1])) {
+            if (args[1] == NULL)
+                f->eax = false;
+            else
+                invalid_ptr = true;
+            break;
+        }
+        f->eax = user_lock_init (args[1]);
+        break;
+    }
 
     case SYS_LOCK_ACQUIRE: {
-      break;
-                         }
+        if (!is_valid_args(args, 1)
+            || !is_valid_ptr(args[1])) {
+            invalid_ptr = true;
+            break;
+        }
+        user_lock_acquire(args[1]);
+        f->eax = true;
+        break;
+    }
 
     case SYS_LOCK_RELEASE: {
-      break;
-                         }
+        if (!is_valid_args(args, 1)
+            || !is_valid_ptr(args[1])) {
+            invalid_ptr = true;
+            break;
+        }
+        user_lock_release(args[1]);
+        f->eax = true;
+        break;
+    }
+
     case SYS_SEMA_INIT: {
-      break;
-                         }
+        if ((int) args[2] < 0) {
+            f->eax = false;
+            break;
+        }
+        if (!is_valid_args(args, 2)
+        || !is_valid_ptr(args[1])) {
+            if (args[1] == NULL)
+                f->eax = false;
+            else
+                invalid_ptr = true;
+            break;
+        }
+        f->eax = user_sema_init(args[1], args[2]);
+        break;
+    }
+
     case SYS_SEMA_DOWN: {
-      break;
-                         }
+        if (!is_valid_args(args, 1)
+            || !is_valid_ptr(args[1])) {
+            invalid_ptr = true;
+            break;
+        }
+        user_sema_down(args[1]);
+        f->eax = true; //double check
+        break;
+    }
+
     case SYS_SEMA_UP: {
-      break;
-                         }
+        if (!is_valid_args(args, 1)
+            || !is_valid_ptr(args[1])) {
+            invalid_ptr = true;
+            break;
+        }
+        user_sema_up(args[1]);
+        f->eax = true; //double check
+        break;
+    }
 
     case SYS_GET_TID: {
       f->eax = thread_current()->tid;
@@ -282,7 +335,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         invalid_ptr = true;
         break;
       }
-//      printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
       process_exit(args[1]);
       break;
                    }
