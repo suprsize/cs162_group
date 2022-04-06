@@ -663,15 +663,15 @@ void process_exit(int exit_code) {
             pthread_join(retval->tid);
         }
     }
-    // Release and free all threads return value struct used to join/track created user threads in
-    while (!list_empty(retvals)) {
-        e = list_pop_front(retvals);
-        retval = list_entry(e, struct thread_retval, elem);
-        if (lock_try_acquire(&retval->join_lock)) {
-          lock_release(&retval->join_lock);
-        }
-        free(retval);
-    }
+//    // Release and free all threads return value struct used to join/track created user threads in
+//    while (!list_empty(retvals)) {
+//        e = list_pop_front(retvals);
+//        retval = list_entry(e, struct thread_retval, elem);
+//        if (lock_try_acquire(&retval->join_lock)) {
+//          lock_release(&retval->join_lock);
+//        }
+//        free(retval);
+//    }
 
 
     // free initialized user locks
