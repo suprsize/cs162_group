@@ -74,7 +74,6 @@ struct process {
   int fd_index;               /* Index of newest file descriptor. */
   bool exit;                  /* Tells all threads to seize immediately. */
   uint8_t* last_stack_address; /* Address of the last free page on user stack */
-  struct lock exit_lock;           /* Look for exit status */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
   struct list threads_retvals;

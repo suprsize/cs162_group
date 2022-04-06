@@ -91,7 +91,6 @@ bool populate_pcb(struct process* pcb) {
   pcb->main_thread = t;
 
   pcb->exit = false;
-  lock_init(&t->pcb->exit_lock);
 
   // initialize the pointer to PHYS_BASE and this will change in setup_thread
   pcb->last_stack_address = ((uint8_t *) PHYS_BASE) - PGSIZE;
@@ -183,12 +182,12 @@ pid_t process_execute(const char* file_name) {
   struct retval* child_retval;
 
 
-//  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
+
   current_pcb = thread_current()->pcb;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(0);
+  fn_copy = palloc_get_page(0); //TODO NEED TO CHANGE IT TO MALLOC
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
@@ -241,10 +240,8 @@ pid_t process_execute(const char* file_name) {
     return -1;
   }
 
-  
   /* Push the child retval struct into current PCB's children list. */
   list_push_back(&current_pcb->children, &child_retval->elem);
-
   return tid;
 }
 
@@ -677,7 +674,7 @@ void process_exit(int exit_code) {
     }
 
 
-    // Remove and free all the user locks that were initialized
+    // free initialized user locks
     while(!list_empty(&cur->pcb->lock_list)) {
         struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
         user_lock* user_lock_ptr = list_entry(e, user_lock, elem);
@@ -692,7 +689,7 @@ void process_exit(int exit_code) {
         free(user_lock_ptr);
     }
 
-    // Remove and free all the user semaphores that were initialized
+    // free initialized user semaphores
     while(!list_empty(&cur->pcb->sema_list)) {
         struct list_elem *e = list_pop_front(&cur->pcb->sema_list);
         user_semaphore* user_sema_ptr = list_entry(e, user_semaphore, elem);
@@ -703,18 +700,16 @@ void process_exit(int exit_code) {
         free(user_sema_ptr);
     }
 
-  // TODO wait for all other threads to die. Free their struct retvals.
   /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
   list_remove(&(cur->pcb->elem));
   lock_release(&(pcb_list_lock));
 
-  // remove the elements from the fd list
+  // Close and free the fd list
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
     struct myFile* f = list_entry(e, struct myFile, elem);
     if (f->file_ptr != NULL) {
-      //TODO this might have to be done with a lock
       file_close(f->file_ptr);
     }
     free(f);
@@ -788,11 +783,7 @@ void process_exit(int exit_code) {
   if (thread_current()->waiting_on == &pcb_to_free->filesys_lock) {
     thread_current()->waiting_on = NULL;
   }
-
-
   free(pcb_to_free);
-
-
   thread_exit();
 }
 
