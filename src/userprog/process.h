@@ -73,12 +73,12 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   int fd_index;               /* Index of newest file descriptor. */
   bool exit;                  /* Tells all threads to seize immediately. */
+  uint8_t* last_stack_address; /* Address of the last free page on user stack */
   struct lock exit_lock;           /* Look for exit status */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
   struct list threads_retvals;
   struct list threads; /* Keeps track of threads and their respective locks. */
-
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
   struct list_elem elem; /* List element so parent can keep track of stuff. */

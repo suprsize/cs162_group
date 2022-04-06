@@ -93,6 +93,9 @@ bool populate_pcb(struct process* pcb) {
   pcb->exit = false;
   lock_init(&t->pcb->exit_lock);
 
+  // initialize the pointer to PHYS_BASE and this will change in setup_thread
+  pcb->last_stack_address = ((uint8_t *) PHYS_BASE) - PGSIZE;
+
   // initialize the file descriptor table
   list_init(&(t->pcb->file_descriptors));
 
@@ -1130,7 +1133,7 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
 
   t = thread_current();
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-  esp_l = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  esp_l = thread_current()->pcb->last_stack_address;
   if (kpage == NULL) {
     return false;
   }
@@ -1138,7 +1141,8 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
   while (pagedir_get_page(thread_current()->pcb->pagedir, esp_l) != NULL) {
     esp_l = ((uint8_t *) esp_l) - PGSIZE;
   }
-
+  // update last_stack_address so the next setup_thread doesn't have to start from beginning
+  thread_current()->pcb->last_stack_address = esp_l;
   if (!install_page(esp_l, kpage, true)) {
     palloc_free_page(kpage);
     return false;
@@ -1213,7 +1217,7 @@ static void start_pthread(void* aux) {
   sema_init(&new_thread_retval->join_sema, 0);
   new_thread_retval->is_terminated = false;
   new_thread_retval->is_exited = false;
-  list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
+  list_push_front(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
   thread_current()->retval = new_thread_retval;
 
   process_activate();
