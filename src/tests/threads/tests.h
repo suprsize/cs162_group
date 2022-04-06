@@ -15,7 +15,6 @@ extern test_func test_priority_change;
 extern test_func test_priority_donate_one;
 extern test_func test_priority_donate_multiple;
 extern test_func test_priority_donate_multiple2;
-extern test_func test_priority_donate_multiple3;
 extern test_func test_priority_donate_sema;
 extern test_func test_priority_donate_nest;
 extern test_func test_priority_donate_lower;
