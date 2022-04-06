@@ -302,21 +302,6 @@ void lock_release(struct lock* lock) {
     e = list_next(e);
   }
 
-
-
-  // for (struct list_elem *e = list_begin(&current->locks); e != list_end(&current->locks); e = list_next(e)) {
-  //   struct lock *l = list_entry(e, struct lock, elem);
-
-  //   for (struct list_elem *i = list_begin(&l->waiters); i != list_end(&l->waiters); i = list_next(i)) {
-  //     struct thread *t = list_entry(i, struct thread, waiter_elem);
-
-  //     // The new effective priority is the max of (base, other's effective priorities waiting on us)
-  //     if (t->e_priority > new_prio) {
-  //       new_prio = t->e_priority;
-  //     }
-  //   }
-  // }
-
   current->e_priority = new_prio;
 
   /* Release lock. */

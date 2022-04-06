@@ -650,7 +650,8 @@ void process_exit(int exit_code) {
 
   struct list_elem* e = NULL;
   struct thread_retval* retval;
-    sema_up(&cur->retval->join_sema);
+  sema_up(&cur->retval->join_sema);
+  // Go through threads and join on all threads that are still running to signal to exit or yield till it is picked
     for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
         retval = list_entry(e, struct thread_retval, elem);
         if (retval->tid != cur->tid) {
@@ -662,7 +663,7 @@ void process_exit(int exit_code) {
             pthread_join(retval->tid);
         }
     }
-    // MIGHT GIVE ERROR.
+    // Release and free all threads return value struct used to join/track created user threads in
     while (!list_empty(retvals)) {
         e = list_pop_front(retvals);
         retval = list_entry(e, struct thread_retval, elem);
@@ -673,32 +674,16 @@ void process_exit(int exit_code) {
     }
 
 
-  // TODO wait for all other threads to die. Free their struct retvals.
-  /* Remove the PCB from the list of PCBs. */
-  lock_acquire(&(pcb_list_lock));
-  list_remove(&(cur->pcb->elem));
-  lock_release(&(pcb_list_lock));
-
-  // TODO: free the file descriptor table
-  // remove the elements from the fd list
-  while(!list_empty(&cur->pcb->file_descriptors)) {
-    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
-    struct myFile* f = list_entry(e, struct myFile, elem);
-    if (f->file_ptr != NULL) {
-      //TODO this might have to be done with a lock
-      file_close(f->file_ptr);
-    }
-    free(f);
-  }
-
     // Remove and free all the user locks that were initialized
     while(!list_empty(&cur->pcb->lock_list)) {
         struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
         user_lock* user_lock_ptr = list_entry(e, user_lock, elem);
         list_remove(&user_lock_ptr->elem);
         if (user_lock_ptr->kernel_lock != NULL) {
-            if (user_lock_ptr->kernel_lock->holder == thread_current())
-              lock_release(&user_lock_ptr->kernel_lock); //might need to keep not release
+            // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
+            if (lock_held_by_current_thread(user_lock_ptr->kernel_lock)){
+                lock_release(user_lock_ptr->kernel_lock);
+            }
             free(user_lock_ptr->kernel_lock);
         }
         free(user_lock_ptr);
@@ -714,6 +699,24 @@ void process_exit(int exit_code) {
         }
         free(user_sema_ptr);
     }
+
+  // TODO wait for all other threads to die. Free their struct retvals.
+  /* Remove the PCB from the list of PCBs. */
+  lock_acquire(&(pcb_list_lock));
+  list_remove(&(cur->pcb->elem));
+  lock_release(&(pcb_list_lock));
+
+  // remove the elements from the fd list
+  while(!list_empty(&cur->pcb->file_descriptors)) {
+    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
+    struct myFile* f = list_entry(e, struct myFile, elem);
+    if (f->file_ptr != NULL) {
+      //TODO this might have to be done with a lock
+      file_close(f->file_ptr);
+    }
+    free(f);
+  }
+
 
   /* Synchornization with retval structs*/
 
