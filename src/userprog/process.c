@@ -1208,7 +1208,7 @@ static void start_pthread(void* aux) {
   sema_init(&new_thread_retval->join_sema, 0);
   new_thread_retval->is_terminated = false;
   new_thread_retval->is_exited = false;
-  list_push_front(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
+  list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
   thread_current()->retval = new_thread_retval;
 
   process_activate();

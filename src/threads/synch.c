@@ -64,7 +64,7 @@ void sema_down(struct semaphore* sema) {
 
   old_level = intr_disable();
   while (sema->value == 0) {
-    list_push_back(&sema->waiters, &thread_current()->elem);
+    list_push_front(&sema->waiters, &thread_current()->elem);
     thread_block();
   }
   sema->value--;
@@ -201,7 +201,7 @@ void lock_acquire (struct lock* lock) {
 
   if (lock->holder != NULL) {
     current->waiting_on = lock;
-    list_push_back(&lock->waiters, &current->waiter_elem);
+    list_push_front(&lock->waiters, &current->waiter_elem);
     struct lock *lock_ptr = lock;
     struct thread *lock_holder;
 
@@ -233,7 +233,7 @@ void lock_acquire (struct lock* lock) {
 
   //list_remove(&current->waiter_elem);
   lock->holder = thread_current();
-  list_push_back(&current->locks, &lock->elem);
+  list_push_front(&current->locks, &lock->elem);
   intr_set_level(old_level);
 }
 
