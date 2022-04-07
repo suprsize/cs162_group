@@ -1074,7 +1074,7 @@ static bool setup_stack(void** esp) {
   uint8_t* kpage;
   bool success = false;
 
-  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  kpage = palloc_get_page(PAL_USER);
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
@@ -1123,7 +1123,7 @@ bool setup_thread(void (**eip)(void), void** esp, void* arg, pthread_fun tf) {
   struct thread* t;
 
   t = thread_current();
-  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  kpage = palloc_get_page(PAL_USER);
   esp_l = thread_current()->pcb->last_stack_address;
   if (kpage == NULL) {
     return false;
@@ -1208,7 +1208,7 @@ static void start_pthread(void* aux) {
   sema_init(&new_thread_retval->join_sema, 0);
   new_thread_retval->is_terminated = false;
   new_thread_retval->is_exited = false;
-  list_push_back(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
+  list_push_front(&thread_current()->pcb->threads_retvals, &new_thread_retval->elem);
   thread_current()->retval = new_thread_retval;
 
   process_activate();
