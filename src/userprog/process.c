@@ -628,11 +628,15 @@ void process_exit(int exit_code) {
   uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
+  if (cur->pcb == NULL) {
+      thread_exit();
+      NOT_REACHED();
+  }
   lock_acquire(&cur->pcb->exit_lock);
-  if (cur->pcb == NULL || cur->pcb->exit) {
-    lock_release(&cur->pcb->exit_lock);
-    thread_exit();
-    NOT_REACHED();
+  if (cur->pcb->exit) {
+      lock_release(&cur->pcb->exit_lock);
+      thread_exit();
+      NOT_REACHED();
   }
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, exit_code);
   cur->pcb->exit = true;
@@ -649,11 +653,6 @@ void process_exit(int exit_code) {
         retval = list_entry(e, struct thread_retval, elem);
         if (retval->tid != cur->tid) {
             //TODO: MONITOR COULD BE BETTER
-            if (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
-                while (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
-                    thread_yield();
-                }
-            }
             pthread_join(retval->tid);
         }
     }
@@ -1305,17 +1304,15 @@ void pthread_exit(void) {
 void pthread_exit_main(void) {
     struct thread* t;
     t = thread_current();
+    struct list* retvals = &t->pcb->threads_retvals;
     sema_up(&t->retval->join_sema);   // notify the waiters
-    if(t->pcb != NULL) {
-        struct list* retvals = &t->pcb->threads_retvals;
-        struct list_elem* e = NULL;
-        struct thread_retval* retval;
-
-        for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
-            retval = list_entry(e, struct thread_retval, elem);
-            if (retval->tid != t->tid) {
-                pthread_join(retval->tid);
-            }
+    struct list_elem* e = NULL;
+    struct thread_retval* retval;
+    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
+        retval = list_entry(e,
+        struct thread_retval, elem);
+        if (retval->tid != t->tid) {
+            pthread_join(retval->tid);
         }
     }
     process_exit(0);
