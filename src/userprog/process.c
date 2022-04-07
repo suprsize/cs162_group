@@ -102,13 +102,20 @@ bool populate_pcb(struct process* pcb) {
   lock_init(&t->pcb->filesys_lock);
   // initialize the exit lock of the pcb exit status for multithreading
   lock_init(&t->pcb->exit_lock);
-  // initialize the user lock list for the process
+
+  lock_init(&t->pcb->lock_list_lock);
+  lock_init(&t->pcb->sema_list_lock);
+
+    // initialize the user lock list for the process
   list_init(&t->pcb->lock_list);
   // initialize the user semaphore list for the process
   list_init(&t->pcb->sema_list);
 
   /* fd codes 0 to 2 are reserved. */
   pcb->fd_index = 2;
+
+  pcb->lock_index = 0;
+  pcb->sema_index = 0;
 
   // TODO free everything below on exit.
 
@@ -628,15 +635,11 @@ void process_exit(int exit_code) {
   uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
-  if (cur->pcb == NULL) {
-      thread_exit();
-      NOT_REACHED();
-  }
   lock_acquire(&cur->pcb->exit_lock);
-  if (cur->pcb->exit) {
-      lock_release(&cur->pcb->exit_lock);
-      thread_exit();
-      NOT_REACHED();
+  if (cur->pcb == NULL || cur->pcb->exit) {
+    lock_release(&cur->pcb->exit_lock);
+    thread_exit();
+    NOT_REACHED();
   }
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, exit_code);
   cur->pcb->exit = true;
@@ -653,6 +656,11 @@ void process_exit(int exit_code) {
         retval = list_entry(e, struct thread_retval, elem);
         if (retval->tid != cur->tid) {
             //TODO: MONITOR COULD BE BETTER
+            if (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
+                while (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
+                    thread_yield();
+                }
+            }
             pthread_join(retval->tid);
         }
     }
@@ -668,17 +676,16 @@ void process_exit(int exit_code) {
 //    }
 
 
-    // free initialized user locks
-    while(!list_empty(&cur->pcb->lock_list)) {
-        struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
-        user_lock* user_lock_ptr = list_entry(e, user_lock, elem);
-        list_remove(&user_lock_ptr->elem);
-        // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
-        if (lock_held_by_current_thread(&user_lock_ptr->kernel_lock)){
-            lock_release(&user_lock_ptr->kernel_lock);
-        }
-        free(user_lock_ptr);
-    }
+//    // free initialized user locks
+//    while(!list_empty(&cur->pcb->lock_list_)) {
+//        struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
+//        struct lock * lock_ptr = list_entry(e, struct lock, elem);
+//        // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
+//        if (lock_held_by_current_thread(lock_ptr)){
+//            lock_release(&user_lock_ptr->kernel_lock);
+//        }
+//        free(user_lock_ptr);
+//    }
 
     // free initialized user semaphores
     while(!list_empty(&cur->pcb->sema_list)) {
@@ -1304,15 +1311,17 @@ void pthread_exit(void) {
 void pthread_exit_main(void) {
     struct thread* t;
     t = thread_current();
-    struct list* retvals = &t->pcb->threads_retvals;
     sema_up(&t->retval->join_sema);   // notify the waiters
-    struct list_elem* e = NULL;
-    struct thread_retval* retval;
-    for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
-        retval = list_entry(e,
-        struct thread_retval, elem);
-        if (retval->tid != t->tid) {
-            pthread_join(retval->tid);
+    if(t->pcb != NULL) {
+        struct list* retvals = &t->pcb->threads_retvals;
+        struct list_elem* e = NULL;
+        struct thread_retval* retval;
+
+        for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
+            retval = list_entry(e, struct thread_retval, elem);
+            if (retval->tid != t->tid) {
+                pthread_join(retval->tid);
+            }
         }
     }
     process_exit(0);
@@ -1320,27 +1329,33 @@ void pthread_exit_main(void) {
 
 
 bool user_lock_init (char* user_address) {
-    user_lock* user_lock_ptr = malloc(sizeof(user_lock));
-    if (user_lock_ptr == NULL) {
+    struct lock* kernel_lock = malloc(sizeof(struct lock));
+    if (kernel_lock == NULL) {
         return false;
     }
-    lock_init(&user_lock_ptr->kernel_lock);
-    user_lock_ptr->user_ptr = user_address;
-    list_push_front(&thread_current()->pcb->lock_list, &user_lock_ptr->elem);
+    struct thread* t = thread_current();
+    lock_init(kernel_lock);
+    lock_acquire(&t->pcb->lock_list_lock);
+    *user_address = (char) t->pcb->lock_index;
+    t->pcb->lock_list_[t->pcb->lock_index] = kernel_lock;
+    t->pcb->lock_index++;
+    lock_release(&t->pcb->lock_list_lock);
     return true;
 }
 
 struct lock* get_user_lock(char* user_address) {
-    struct list* locks = &thread_current()->pcb->lock_list;
-    struct list_elem* e = NULL;
-    struct user_lock* user_lock_ptr = NULL;
-    for (e = list_begin(locks); e != list_end(locks); e = list_next(e)) {
-        user_lock_ptr = list_entry(e, user_lock, elem);
-        if (user_address == user_lock_ptr->user_ptr)
-            return user_lock_ptr;
+    struct thread* t = thread_current();
+    int index = *user_address;
+    lock_acquire(&t->pcb->lock_list_lock);
+    if (index >= t->pcb->lock_index || index < 0) {
+        lock_release(&t->pcb->lock_list_lock);
+        return NULL;
     }
-    return NULL;
+    struct lock* ptr = t->pcb->lock_list_[index];
+    lock_release(&t->pcb->lock_list_lock);
+    return ptr;
 }
+
 /* Acquires lock for user thread and includes lock priority donation. */
 void user_lock_acquire (char* user_address) {
     struct user_lock* user_lock_ptr = get_user_lock(user_address);
@@ -1357,8 +1372,6 @@ void user_lock_acquire (char* user_address) {
 
 /* Releases the lock for user threads and includes priority donation. */
 void user_lock_release (char* user_address) {
-    int caller = thread_current()->tid; //for debugging
-
     struct user_lock *user_lock_ptr = get_user_lock(user_address);
     bool found = (user_lock_ptr != NULL);
     if (found) {
@@ -1372,27 +1385,32 @@ void user_lock_release (char* user_address) {
 
 
 bool user_sema_init(char *user_address, unsigned value) {
-    user_semaphore *user_sema_ptr = malloc(sizeof(user_semaphore));
-    if (user_sema_ptr == NULL) {
+    struct semaphore* kernel_sema = malloc(sizeof(struct semaphore));
+    if (kernel_sema == NULL) {
         return false;
     }
-    sema_init(&user_sema_ptr->kernel_semaphore, value);
-    user_sema_ptr->user_ptr = user_address;
-    list_push_front(&thread_current()->pcb->sema_list, &user_sema_ptr->elem);
+    struct thread* t = thread_current();
+    sema_init(kernel_sema, value);
+    lock_acquire(&t->pcb->sema_list_lock);
+    *user_address = (char) t->pcb->sema_index;
+    t->pcb->sema_list_[t->pcb->sema_index] = kernel_sema;
+    t->pcb->sema_index++;
+    lock_release(&t->pcb->sema_list_lock);
     return true;
 }
 
 
 struct semaphore *get_user_sema(char *user_address) {
-    struct list *semaphores = &thread_current()->pcb->sema_list;
-    struct list_elem *e = NULL;
-    struct user_semaphore *user_sema_ptr = NULL;
-    for (e = list_begin(semaphores); e != list_end(semaphores); e = list_next(e)) {
-        user_sema_ptr = list_entry(e, user_semaphore, elem);
-        if (user_address == user_sema_ptr->user_ptr)
-            return user_sema_ptr;
+    struct thread* t = thread_current();
+    int index = *user_address;
+    lock_acquire(&t->pcb->sema_list_lock);
+    if (index >= t->pcb->sema_index || index < 0) {
+        lock_release(&t->pcb->sema_list_lock);
+        return NULL;
     }
-    return NULL;
+    struct semaphore* ptr = t->pcb->sema_list_[index];
+    lock_release(&t->pcb->sema_list_lock);
+    return ptr;
 }
 
 /* Acquires semaphore for user thread. */
