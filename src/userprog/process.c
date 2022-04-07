@@ -685,12 +685,9 @@ void process_exit(int exit_code) {
         struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
         user_lock* user_lock_ptr = list_entry(e, user_lock, elem);
         list_remove(&user_lock_ptr->elem);
-        if (user_lock_ptr->kernel_lock != NULL) {
-            // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
-            if (lock_held_by_current_thread(user_lock_ptr->kernel_lock)){
-                lock_release(user_lock_ptr->kernel_lock);
-            }
-            free(user_lock_ptr->kernel_lock);
+        // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
+        if (lock_held_by_current_thread(&user_lock_ptr->kernel_lock)){
+            lock_release(&user_lock_ptr->kernel_lock);
         }
         free(user_lock_ptr);
     }
@@ -1345,15 +1342,11 @@ void pthread_exit_main(void) {
 
 
 bool user_lock_init (char* user_address) {
-    int caller = thread_current()->tid; //for debugging
-
     user_lock* user_lock_ptr = malloc(sizeof(user_lock));
-    struct lock* k_lock = malloc(sizeof(struct lock));
-    if (user_lock_ptr == NULL || k_lock == NULL) {
+    if (user_lock_ptr == NULL) {
         return false;
     }
-    lock_init(k_lock);
-    user_lock_ptr->kernel_lock = k_lock;
+    lock_init(&user_lock_ptr->kernel_lock);
     user_lock_ptr->user_ptr = user_address;
     list_push_front(&thread_current()->pcb->lock_list, &user_lock_ptr->elem);
     return true;
@@ -1372,13 +1365,11 @@ struct lock* get_user_lock(char* user_address) {
 }
 /* Acquires lock for user thread and includes lock priority donation. */
 void user_lock_acquire (char* user_address) {
-    int caller = thread_current()->tid; //for debugging
-
     struct user_lock* user_lock_ptr = get_user_lock(user_address);
     bool found = (user_lock_ptr != NULL);
     if (found) {
-        if (!lock_held_by_current_thread(user_lock_ptr->kernel_lock)) {
-            lock_acquire(user_lock_ptr->kernel_lock); // don't need to check holder bkz lock_acquire does
+        if (!lock_held_by_current_thread(&user_lock_ptr->kernel_lock)) {
+            lock_acquire(&user_lock_ptr->kernel_lock); // don't need to check holder bkz lock_acquire does
             return;
         }
     }
@@ -1393,8 +1384,8 @@ void user_lock_release (char* user_address) {
     struct user_lock *user_lock_ptr = get_user_lock(user_address);
     bool found = (user_lock_ptr != NULL);
     if (found) {
-        if (lock_held_by_current_thread(user_lock_ptr->kernel_lock)) {
-            lock_release(user_lock_ptr->kernel_lock);
+        if (lock_held_by_current_thread(&user_lock_ptr->kernel_lock)) {
+            lock_release(&user_lock_ptr->kernel_lock);
             return;
         }
     }

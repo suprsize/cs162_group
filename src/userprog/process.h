@@ -48,7 +48,7 @@ struct retval {
 /* Lock manager for when user is allocated. */
 typedef struct user_lock {
     // TODO: CHANGE TO NOT MALLOC
-    struct lock* kernel_lock;
+    struct lock kernel_lock;
     char* user_ptr;
     struct list_elem elem;
 } user_lock;
