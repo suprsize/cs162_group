@@ -671,11 +671,27 @@ void process_exit(int exit_code) {
 //    }
 
 
-//    // free initialized user locks
+    // free initialized user locks
+    lock_acquire(&cur->pcb->lock_list_lock);
+    for(int i = 0; i < cur->pcb->lock_index; i++) {
+        struct lock* lck = cur->pcb->lock_list_[i];
+        if (lock_held_by_current_thread(lck)) {
+            lock_release(lck);
+        }
+        free(lck);
+    }
+    lock_release(&cur->pcb->lock_list_lock);
+
+    lock_acquire(&cur->pcb->sema_list_lock);
+    for(int i = 0; i < cur->pcb->sema_index; i++) {
+        struct semaphore* sema = cur->pcb->sema_list_[i];
+        free(sema);
+    }
+    lock_release(&cur->pcb->sema_list_lock);
 
 
 
-  /* Remove the PCB from the list of PCBs. */
+    /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
   list_remove(&(cur->pcb->elem));
   lock_release(&(pcb_list_lock));
@@ -1338,11 +1354,11 @@ struct lock* get_user_lock(char* user_address) {
 
 /* Acquires lock for user thread and includes lock priority donation. */
 void user_lock_acquire (char* user_address) {
-    struct user_lock* user_lock_ptr = get_user_lock(user_address);
-    bool found = (user_lock_ptr != NULL);
+    struct lock* lock_ptr = get_user_lock(user_address);
+    bool found = (lock_ptr != NULL);
     if (found) {
-        if (!lock_held_by_current_thread(&user_lock_ptr->kernel_lock)) {
-            lock_acquire(&user_lock_ptr->kernel_lock); // don't need to check holder bkz lock_acquire does
+        if (!lock_held_by_current_thread(lock_ptr)) {
+            lock_acquire(lock_ptr); // don't need to check holder bkz lock_acquire does
             return;
         }
     }
@@ -1352,11 +1368,11 @@ void user_lock_acquire (char* user_address) {
 
 /* Releases the lock for user threads and includes priority donation. */
 void user_lock_release (char* user_address) {
-    struct user_lock *user_lock_ptr = get_user_lock(user_address);
-    bool found = (user_lock_ptr != NULL);
+    struct lock *lock_ptr = get_user_lock(user_address);
+    bool found = (lock_ptr != NULL);
     if (found) {
-        if (lock_held_by_current_thread(&user_lock_ptr->kernel_lock)) {
-            lock_release(&user_lock_ptr->kernel_lock);
+        if (lock_held_by_current_thread(lock_ptr)) {
+            lock_release(lock_ptr);
             return;
         }
     }
@@ -1382,7 +1398,7 @@ bool user_sema_init(char *user_address, unsigned value) {
 
 struct semaphore *get_user_sema(char *user_address) {
     struct thread* t = thread_current();
-    int index = *user_address;
+    int index = (int) *user_address;
     lock_acquire(&t->pcb->sema_list_lock);
     if (index >= t->pcb->sema_index || index < 0) {
         lock_release(&t->pcb->sema_list_lock);
@@ -1395,10 +1411,10 @@ struct semaphore *get_user_sema(char *user_address) {
 
 /* Acquires semaphore for user thread. */
 void user_sema_down(char *user_address) {
-    struct user_semaphore *user_sema_ptr = get_user_sema(user_address);
-    bool found = (user_sema_ptr != NULL);
+    struct semaphore *sema_ptr = get_user_sema(user_address);
+    bool found = (sema_ptr != NULL);
     if (found) {
-        sema_down(&user_sema_ptr->kernel_semaphore); // don't need to check holder bkz lock_acquire does
+        sema_down(sema_ptr); // don't need to check holder bkz lock_acquire does
         return;
     }
     process_exit(1);
@@ -1407,10 +1423,10 @@ void user_sema_down(char *user_address) {
 
 /* Releases the lock for user threads and includes priority donation. */
 void user_sema_up(char *user_address) {
-    struct user_semaphore *user_sema_ptr = get_user_sema(user_address);
-    bool found = (user_sema_ptr != NULL);
+    struct semaphore *sema_ptr = get_user_sema(user_address);
+    bool found = (sema_ptr != NULL);
     if (found) {
-        sema_up(&user_sema_ptr->kernel_semaphore);
+        sema_up(sema_ptr);
         return;
     }
     process_exit(1);

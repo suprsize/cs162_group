@@ -45,20 +45,6 @@ struct retval {
   struct list_elem elem; /* List element so parent can keep track of stuff. */
 };
 
-/* Lock manager for when user is allocated. */
-typedef struct user_lock {
-    struct lock kernel_lock;
-    char* user_ptr;
-    struct list_elem elem;
-} user_lock;
-
-/* Semaphore manager for when user is allocated. */
-typedef struct user_semaphore {
-    struct semaphore kernel_semaphore;
-    char* user_ptr;
-    struct list_elem elem;
-} user_semaphore;
-
 struct list pcb_list; /* A list of all processes */
 
 /* The process control block for a given process. Since
