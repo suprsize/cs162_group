@@ -88,8 +88,6 @@ struct process {
   struct list_elem elem; /* List element so parent can keep track of stuff. */
   struct lock* lock_list_[127]; /* List of all user_lock that have been initialized; */
   struct semaphore* sema_list_[127]; /* List of all user_sema that have been initialized; */
-  struct list lock_list;
-  struct list sema_list;
 };
 
 void userprog_init(void);

@@ -106,11 +106,6 @@ bool populate_pcb(struct process* pcb) {
   lock_init(&t->pcb->lock_list_lock);
   lock_init(&t->pcb->sema_list_lock);
 
-    // initialize the user lock list for the process
-  list_init(&t->pcb->lock_list);
-  // initialize the user semaphore list for the process
-  list_init(&t->pcb->sema_list);
-
   /* fd codes 0 to 2 are reserved. */
   pcb->fd_index = 2;
 
@@ -677,23 +672,8 @@ void process_exit(int exit_code) {
 
 
 //    // free initialized user locks
-//    while(!list_empty(&cur->pcb->lock_list_)) {
-//        struct list_elem *e = list_pop_front(&cur->pcb->lock_list);
-//        struct lock * lock_ptr = list_entry(e, struct lock, elem);
-//        // KEEP IN MIND LOCKS NOT HELD BY CURRENT THREAD WILL NOT BE RELEASE BEFORE FREEING.
-//        if (lock_held_by_current_thread(lock_ptr)){
-//            lock_release(&user_lock_ptr->kernel_lock);
-//        }
-//        free(user_lock_ptr);
-//    }
 
-    // free initialized user semaphores
-    while(!list_empty(&cur->pcb->sema_list)) {
-        struct list_elem *e = list_pop_front(&cur->pcb->sema_list);
-        user_semaphore* user_sema_ptr = list_entry(e, user_semaphore, elem);
-        list_remove(&user_sema_ptr->elem);
-        free(user_sema_ptr);
-    }
+
 
   /* Remove the PCB from the list of PCBs. */
   lock_acquire(&(pcb_list_lock));
