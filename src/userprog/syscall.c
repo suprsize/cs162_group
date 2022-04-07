@@ -22,9 +22,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-//  printf("System call number: %d\n", args[0]);
-// TODO argument checking
-
   bool invalid_ptr = !is_valid_ptr(args);
   struct lock* file_lock = &thread_current()->pcb->filesys_lock;
 
@@ -206,7 +203,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         lock_release(file_lock);
         break;
       }
-      invalid_ptr = true; //TODO change to a better name maybe
+      invalid_ptr = true;
       lock_release(file_lock);
       break;
     }
@@ -215,7 +212,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
-       // TODO double check validation
        if (count < 0) {
          f->eax = -1;
          break;
@@ -237,7 +233,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
-       // TODO double check validation
        if (count < 0) {
          f->eax = -1;
          break;
@@ -267,8 +262,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
          lock_release(file_lock);
          break;
        }
-       invalid_ptr = true; //TODO change to a better name maybe
-
+       invalid_ptr = true;
        lock_release(file_lock);
        break;
      }
@@ -284,15 +278,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
          lock_release(file_lock);
          break;
        }
-       invalid_ptr = true; //TODO change to a better name maybe
-
+       invalid_ptr = true;
        lock_release(file_lock);
        break;
      }
 
      case SYS_CLOSE: {
        int fd = args[1];
-       //TODO WE ARE HAVE TO FREEING THE FD TABLE WHEN PROCESS CLOSES.
        lock_acquire(file_lock);
        if (close_file(fd) == -1) {
          invalid_ptr = true;

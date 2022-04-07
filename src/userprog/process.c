@@ -198,8 +198,7 @@ pid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
-  /** 
-   * TODO erase this for project submission
+  /**
    * Explanation on wtf is going on down below
    *
    * We need to wait for child to initialize the PCB. We wait
@@ -336,8 +335,6 @@ int read_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
 
   switch (fd) {
-      //TODO need to test the stdin
-
     case STDIN_FILENO:
       for (unsigned int i = 0; i < count; i += 1) {
         buffer[i] = input_getc();
@@ -354,7 +351,6 @@ int read_file(int fd, uint32_t* buffer, size_t count) {
     default: {
       struct file * f = get_file(fd);
       if (f == NULL) {
-        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
         return -1;
       }
       retval = file_read(f, buffer, count);
@@ -368,8 +364,6 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
 
   switch (fd) {
-      //TODO need to test the stdin
-
     case STDIN_FILENO:
       retval = -1;
       break;
@@ -379,13 +373,11 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       break;
 
     case 2:
-      //TODO IMPLEMENT STDERR
       break;
 
     default: {
       struct file * f = get_file(fd);
       if (f == NULL) {
-        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
         return -1;
       }
       retval = file_write(f, buffer, count);
@@ -573,9 +565,6 @@ int process_wait(pid_t child_pid) {
   struct list_elem* e;
   for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     struct retval* _retval = list_entry(e, struct retval, elem);
-
-    // TODO are TID and PID the same? userprog.pdf has a thing
-    // on this but not sure...
     if (_retval->tid == child_pid) {
       child_retval = _retval;
     }
@@ -668,7 +657,7 @@ void process_exit(int exit_code) {
             pthread_join(retval->tid);
         }
     }
-
+    //TODO: FREE RETVALS
 //    // Release and free all threads return value struct used to join/track created user threads in
 //    while (!list_empty(retvals)) {
 //        e = list_pop_front(retvals);
@@ -1279,7 +1268,6 @@ tid_t pthread_join(tid_t tid) {
         lock_release(&retval->join_lock);
         return tid;
     }
-//TODO: NEED TO FREE RETVAL IN PROCESS_EXIT
 }
 
 /* Free the current thread's resources. Most resources will
@@ -1294,8 +1282,6 @@ tid_t pthread_join(tid_t tid) {
 void pthread_exit(void) {
   struct thread* t;
   t = thread_current();
-
-  //TODO NEED TO CHECK FOR MAIN EXIT
   if (t->pcb->main_thread == t) {
     pthread_exit_main();
     return;
@@ -1319,8 +1305,6 @@ void pthread_exit(void) {
 void pthread_exit_main(void) {
     struct thread* t;
     t = thread_current();
-    // TODO: double check resource freeing
-
     sema_up(&t->retval->join_sema);   // notify the waiters
     if(t->pcb != NULL) {
         struct list* retvals = &t->pcb->threads_retvals;
