@@ -47,6 +47,7 @@ struct retval {
 
 /* Lock manager for when user is allocated. */
 typedef struct user_lock {
+    // TODO: CHANGE TO NOT MALLOC
     struct lock* kernel_lock;
     char* user_ptr;
     struct list_elem elem;
@@ -73,6 +74,7 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   int fd_index;               /* Index of newest file descriptor. */
   bool exit;                  /* Tells all threads to seize immediately. */
+  struct lock exit_lock;      /* lock for exit status of the pcb */
   uint8_t* last_stack_address; /* Address of the last free page on user stack */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;

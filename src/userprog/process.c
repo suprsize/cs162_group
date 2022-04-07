@@ -100,7 +100,8 @@ bool populate_pcb(struct process* pcb) {
 
   // initialize the global lock of filesys calls
   lock_init(&t->pcb->filesys_lock);
-
+  // initialize the exit lock of the pcb exit status for multithreading
+  lock_init(&t->pcb->exit_lock);
   // initialize the user lock list for the process
   list_init(&t->pcb->lock_list);
   // initialize the user semaphore list for the process
@@ -638,12 +639,15 @@ void process_exit(int exit_code) {
   uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
+  lock_acquire(&cur->pcb->exit_lock);
   if (cur->pcb == NULL || cur->pcb->exit) {
+    lock_release(&cur->pcb->exit_lock);
     thread_exit();
     NOT_REACHED();
   }
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, exit_code);
   cur->pcb->exit = true;
+  lock_release(&cur->pcb->exit_lock);
   struct retval* proc_retval = cur->pcb->retval;
   struct list* children_retvals;
   struct list* retvals = &cur->pcb->threads_retvals;
@@ -655,6 +659,7 @@ void process_exit(int exit_code) {
     for (e = list_begin(retvals); e != list_end(retvals); e = list_next(e)) {
         retval = list_entry(e, struct thread_retval, elem);
         if (retval->tid != cur->tid) {
+            //TODO: MONITOR COULD BE BETTER
             if (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
                 while (retval->tid == cur->pcb->main_thread->tid && !retval->is_exited) {
                     thread_yield();
@@ -663,6 +668,7 @@ void process_exit(int exit_code) {
             pthread_join(retval->tid);
         }
     }
+
 //    // Release and free all threads return value struct used to join/track created user threads in
 //    while (!list_empty(retvals)) {
 //        e = list_pop_front(retvals);
