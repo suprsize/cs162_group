@@ -697,9 +697,6 @@ void process_exit(int exit_code) {
         struct list_elem *e = list_pop_front(&cur->pcb->sema_list);
         user_semaphore* user_sema_ptr = list_entry(e, user_semaphore, elem);
         list_remove(&user_sema_ptr->elem);
-        if (user_sema_ptr->kernel_semaphore != NULL) {
-            free(user_sema_ptr->kernel_semaphore);
-        }
         free(user_sema_ptr);
     }
 
@@ -1395,12 +1392,10 @@ void user_lock_release (char* user_address) {
 
 bool user_sema_init(char *user_address, unsigned value) {
     user_semaphore *user_sema_ptr = malloc(sizeof(user_semaphore));
-    struct semaphore *k_sema = malloc(sizeof(struct semaphore));
-    if (user_sema_ptr == NULL || k_sema == NULL) {
+    if (user_sema_ptr == NULL) {
         return false;
     }
-    sema_init(k_sema, value);
-    user_sema_ptr->kernel_semaphore = k_sema;
+    sema_init(&user_sema_ptr->kernel_semaphore, value);
     user_sema_ptr->user_ptr = user_address;
     list_push_front(&thread_current()->pcb->sema_list, &user_sema_ptr->elem);
     return true;
@@ -1424,7 +1419,7 @@ void user_sema_down(char *user_address) {
     struct user_semaphore *user_sema_ptr = get_user_sema(user_address);
     bool found = (user_sema_ptr != NULL);
     if (found) {
-        sema_down(user_sema_ptr->kernel_semaphore); // don't need to check holder bkz lock_acquire does
+        sema_down(&user_sema_ptr->kernel_semaphore); // don't need to check holder bkz lock_acquire does
         return;
     }
     process_exit(1);
@@ -1436,7 +1431,7 @@ void user_sema_up(char *user_address) {
     struct user_semaphore *user_sema_ptr = get_user_sema(user_address);
     bool found = (user_sema_ptr != NULL);
     if (found) {
-        sema_up(user_sema_ptr->kernel_semaphore);
+        sema_up(&user_sema_ptr->kernel_semaphore);
         return;
     }
     process_exit(1);

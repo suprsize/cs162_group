@@ -55,7 +55,7 @@ typedef struct user_lock {
 
 /* Semaphore manager for when user is allocated. */
 typedef struct user_semaphore {
-    struct semaphore* kernel_semaphore;
+    struct semaphore kernel_semaphore;
     char* user_ptr;
     struct list_elem elem;
 } user_semaphore;
