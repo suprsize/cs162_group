@@ -318,9 +318,9 @@ int find_cache_entry(block_sector_t sector_num) {
     int evict = do_clock_alg();
     struct cache_entry new_entry = cache[evict];
     lock_acquire(&new_entry.entry_lock);
-    block_sector_t old_sector = new_entry.sector;
     // Prep the section so that when another process looks for the same sector it could find it and wait for it
     bool occupied = new_entry.valid && new_entry.dirty;
+    block_sector_t old_sector = new_entry.sector;
     new_entry.sector = sector_num;
     new_entry.valid = true;
     new_entry.dirty = false;
@@ -329,8 +329,8 @@ int find_cache_entry(block_sector_t sector_num) {
     lock_release(&cache_lock);
     // Update the buffer for the new sector
     if (occupied)
-        block_write(fs_device, old_sector, &new_entry.buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
-    block_read(fs_device, sector_num, &new_entry.buffer);
+        block_write(fs_device, old_sector, new_entry.buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
+    block_read(fs_device, sector_num, new_entry.buffer);
     return evict;
 }
 
@@ -340,14 +340,16 @@ void cache_read(block_sector_t sector_idx, void* buffer, off_t size, off_t offse
     while (entry.sector != sector_idx) {
         lock_release(&entry.entry_lock);
         cache_idx = find_cache_entry(sector_idx);
+        entry = cache[cache_idx];
     }
     // Update flags
     lock_acquire(&cache_lock);
     entry.recent = true;
     lock_release(&cache_lock);
-
+    // Copy the data into user buffer
     ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
     memcpy(buffer, entry.buffer + offset, size);
+    lock_release(&entry.entry_lock);
 }
 
 void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
@@ -356,15 +358,17 @@ void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offs
     while (entry.sector != sector_idx) {
         lock_release(&entry.entry_lock);
         cache_idx = find_cache_entry(sector_idx);
+        entry = cache[cache_idx];
     }
     // Update flags
     lock_acquire(&cache_lock);
     entry.dirty = true;
     entry.recent = true;
     lock_release(&cache_lock);
-
+    // Copy the data cache
     ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
     memcpy(entry.buffer + offset, buffer, size);
+    lock_release(&entry.entry_lock);
 }
 
 
