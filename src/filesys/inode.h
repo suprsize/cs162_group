@@ -25,8 +25,8 @@ struct lock cache_lock;                 // Global lock for the cache
 unsigned int clock_index;               // Current position of clock hand alg for cache policy
 
 void cache_init(void);
-void cache_read(block_sector_t, void*, off_t, off_t);
-void cache_write(block_sector_t, void*, off_t, off_t);
+void cache_read(struct block*, block_sector_t, void*);
+void cache_write(struct block*, block_sector_t, const void*);
 
 void inode_init(void);
 bool inode_create(block_sector_t, off_t);

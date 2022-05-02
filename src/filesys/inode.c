@@ -20,7 +20,7 @@ struct inode_disk {
 };
 
 int do_clock_alg(void);
-int find_cache_entry(block_sector_t sector_num);
+int find_cache_entry(struct block*, block_sector_t sector_num);
 
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -77,13 +77,13 @@ bool inode_create(block_sector_t sector, off_t length) {
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
     if (free_map_allocate(sectors, &disk_inode->start)) {
-      cache_write(sector, disk_inode, 0, BLOCK_SECTOR_SIZE);
+      cache_write(fs_device, sector, disk_inode);
       if (sectors > 0) {
         static char zeros[BLOCK_SECTOR_SIZE];
         size_t i;
 
         for (i = 0; i < sectors; i++)
-          cache_write(disk_inode->start + i, zeros, 0, BLOCK_SECTOR_SIZE);
+          cache_write(fs_device, disk_inode->start + i, zeros);
       }
       success = true;
     }
@@ -119,7 +119,7 @@ struct inode* inode_open(block_sector_t sector) {
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  cache_read(inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
+  cache_read(fs_device, inode->sector, &inode->data);
   return inode;
 }
 
@@ -188,7 +188,7 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
 
     if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
       /* Read full sector directly into caller's buffer. */
-      cache_read(sector_idx, buffer + bytes_read, 0, BLOCK_SECTOR_SIZE);
+      cache_read(fs_device, sector_idx, buffer + bytes_read);
     } else {
       /* Read sector into bounce buffer, then partially copy
              into caller's buffer. */
@@ -197,7 +197,7 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
         if (bounce == NULL)
           break;
       }
-      cache_read(sector_idx, bounce, 0, BLOCK_SECTOR_SIZE);
+      cache_read(fs_device, sector_idx, bounce);
       memcpy(buffer + bytes_read, bounce + sector_ofs, chunk_size);
     }
 
@@ -241,7 +241,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
     if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
       /* Write full sector directly to disk. */
-      cache_write(sector_idx, buffer + bytes_written, 0, BLOCK_SECTOR_SIZE);
+      cache_write(fs_device, sector_idx, buffer + bytes_written);
     } else {
       /* We need a bounce buffer. */
       if (bounce == NULL) {
@@ -254,11 +254,11 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
       if (sector_ofs > 0 || chunk_size < sector_left)
-        cache_read(sector_idx, bounce, 0, BLOCK_SECTOR_SIZE);
+        cache_read(fs_device, sector_idx, bounce);
       else
         memset(bounce, 0, BLOCK_SECTOR_SIZE);
       memcpy(bounce + sector_ofs, buffer + bytes_written, chunk_size);
-      cache_write(sector_idx, bounce, 0, BLOCK_SECTOR_SIZE);
+      cache_write(fs_device, sector_idx, bounce);
     }
 
     /* Advance. */
@@ -309,7 +309,7 @@ int do_clock_alg() {
 }
 
 // Searches for the cache entry with the given sector. If it could not find, it will return -1.
-int find_cache_entry(block_sector_t sector_num) {
+int find_cache_entry(struct block* drive, block_sector_t sector_num) {
     lock_acquire(&cache_lock);
     for (int i = 0; i < CACHE_SIZE; i++) {
         if (cache[i].valid && cache[i].sector == sector_num) {
@@ -333,17 +333,17 @@ int find_cache_entry(block_sector_t sector_num) {
     lock_release(&cache_lock);
     // Update the buffer for the new sector
     if (occupied)
-        block_write(fs_device, old_sector, entry->buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
-    block_read(fs_device, sector_num, entry->buffer);
+        block_write(drive, old_sector, entry->buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
+    block_read(drive, sector_num, entry->buffer);
     return evict;
 }
 
-void cache_read(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
-    int cache_idx = find_cache_entry(sector_idx);
+void cache_read(struct block* drive, block_sector_t sector_idx, void* buffer) {
+    int cache_idx = find_cache_entry(drive, sector_idx);
     struct cache_entry* entry = &cache[cache_idx];
     while (entry->sector != sector_idx) {
         lock_release(&entry->entry_lock);
-        cache_idx = find_cache_entry(sector_idx);
+        cache_idx = find_cache_entry(drive, sector_idx);
         entry = &cache[cache_idx];
     }
     // Update flags
@@ -352,17 +352,16 @@ void cache_read(block_sector_t sector_idx, void* buffer, off_t size, off_t offse
     lock_release(&cache_lock);
 
     // Copy the data into user buffer
-    ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
-    memcpy(buffer, entry->buffer + offset, size);
+    memcpy(buffer, entry->buffer, BLOCK_SECTOR_SIZE);
     lock_release(&entry->entry_lock);
 }
 
-void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
-    int cache_idx = find_cache_entry(sector_idx);
+void cache_write(struct block* drive, block_sector_t sector_idx, const void* buffer) {
+    int cache_idx = find_cache_entry(drive, sector_idx);
     struct cache_entry* entry = &cache[cache_idx];
     while (entry->sector != sector_idx) {
         lock_release(&entry->entry_lock);
-        cache_idx = find_cache_entry(sector_idx);
+        cache_idx = find_cache_entry(drive, sector_idx);
         entry = &cache[cache_idx];
     }
     // Update flags
@@ -372,8 +371,7 @@ void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offs
     lock_release(&cache_lock);
 
     // Copy the data cache
-    ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
-    memcpy(entry->buffer + offset, buffer, size);
+    memcpy(entry->buffer, buffer, BLOCK_SECTOR_SIZE);
     lock_release(&entry->entry_lock);
 }
 
