@@ -83,8 +83,6 @@ bool populate_pcb(struct process* pcb) {
   // initialize the file descriptor table
   list_init(&(t->pcb->file_descriptors));
 
-  // initialize the global lock of filesys calls
-  lock_init(&t->pcb->filesys_lock);
 
   pcb->fd_index = 2;
 

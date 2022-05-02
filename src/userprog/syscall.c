@@ -26,7 +26,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 // TODO argument checking
 
   bool invalid_ptr = !is_valid_ptr(args);
-  struct lock* file_lock = &thread_current()->pcb->filesys_lock;
 
   // Stack pointer is invalid.
   if (invalid_ptr) {
