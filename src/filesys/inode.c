@@ -285,3 +285,82 @@ void inode_allow_write(struct inode* inode) {
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t inode_length(const struct inode* inode) { return inode->data.length; }
+
+
+
+void cache_init() {
+    lock_init(&cache_lock);
+    clock_index = 0;
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        cache[i].valid = false;
+        cache[i].dirty = false;
+        cache[i].recent = false;
+        lock_init(&cache[i].entry_lock);
+    }
+}
+
+// Must hold the global Lock before calling this function
+int do_clock_alg() {
+    return clock_index;
+}
+
+// Searches for the cache entry with the given sector. If it could not find, it will return -1.
+int find_cache_entry(block_sector_t sector_num) {
+    lock_acquire(&cache_lock);
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (cache[i].valid && cache[i].sector == sector_num) {
+            lock_release(&cache_lock);
+            lock_acquire(&cache[i].entry_lock);
+            return i;
+        }
+    }
+    // Sector is not in the cache, bring it into cache
+    int evict = do_clock_alg();
+    lock_acquire(&cache[evict].entry_lock);
+    block_sector_t old_sector = cache[evict].sector;
+    // Prep the section so that when another process looks for the same sector it could find it and wait for it
+    bool occupied = cache[evict].valid && cache[evict].dirty;
+    cache[evict].sector = sector_num;
+    cache[evict].valid = true;
+    cache[evict].dirty = false;
+    cache[evict].recent = true;
+    // Release global lock
+    lock_release(&cache_lock);
+    // Update the buffer for the new sector
+    if (occupied)
+        block_write(fs_device, old_sector, &cache[evict].buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
+    block_read(fs_device, sector_num, &cache[evict].buffer);
+    return evict;
+}
+
+void cache_read(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
+
+}
+
+void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
