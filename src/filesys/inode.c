@@ -19,7 +19,7 @@ struct inode_disk {
   uint32_t unused[125]; /* Not used. */
 };
 
-int do_clock_alg(void);
+unsigned int do_clock_alg(void);
 int find_cache_entry(struct block*, block_sector_t sector_num);
 
 
@@ -304,8 +304,16 @@ void cache_init() {
 }
 
 // Must hold the global Lock before calling this function
-int do_clock_alg() {
-    return clock_index;
+unsigned int do_clock_alg() {
+    struct cache_entry* entry = &cache[clock_index];
+    while(entry->recent) {
+        entry->recent = false;
+        clock_index = (clock_index + 1) % CACHE_SIZE;
+        entry = &cache[clock_index];
+    }
+    unsigned int empty_spot = clock_index;
+    clock_index = (clock_index + 1) % CACHE_SIZE;
+    return empty_spot;
 }
 
 // Searches for the cache entry with the given sector. If it could not find, it will return -1.
