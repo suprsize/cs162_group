@@ -316,29 +316,55 @@ int find_cache_entry(block_sector_t sector_num) {
     }
     // Sector is not in the cache, bring it into cache
     int evict = do_clock_alg();
-    lock_acquire(&cache[evict].entry_lock);
-    block_sector_t old_sector = cache[evict].sector;
+    struct cache_entry new_entry = cache[evict];
+    lock_acquire(&new_entry.entry_lock);
+    block_sector_t old_sector = new_entry.sector;
     // Prep the section so that when another process looks for the same sector it could find it and wait for it
-    bool occupied = cache[evict].valid && cache[evict].dirty;
-    cache[evict].sector = sector_num;
-    cache[evict].valid = true;
-    cache[evict].dirty = false;
-    cache[evict].recent = true;
+    bool occupied = new_entry.valid && new_entry.dirty;
+    new_entry.sector = sector_num;
+    new_entry.valid = true;
+    new_entry.dirty = false;
+    new_entry.recent = true;
     // Release global lock
     lock_release(&cache_lock);
     // Update the buffer for the new sector
     if (occupied)
-        block_write(fs_device, old_sector, &cache[evict].buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
-    block_read(fs_device, sector_num, &cache[evict].buffer);
+        block_write(fs_device, old_sector, &new_entry.buffer); //DON'T KNOW IF WE NEED THE & FOR BUFFER----------
+    block_read(fs_device, sector_num, &new_entry.buffer);
     return evict;
 }
 
 void cache_read(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
+    int cache_idx = find_cache_entry(sector_idx);
+    struct cache_entry entry = cache[cache_idx];
+    while (entry.sector != sector_idx) {
+        lock_release(&entry.entry_lock);
+        cache_idx = find_cache_entry(sector_idx);
+    }
+    // Update flags
+    lock_acquire(&cache_lock);
+    entry.recent = true;
+    lock_release(&cache_lock);
 
+    ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
+    memcpy(buffer, entry.buffer + offset, size);
 }
 
 void cache_write(block_sector_t sector_idx, void* buffer, off_t size, off_t offset) {
+    int cache_idx = find_cache_entry(sector_idx);
+    struct cache_entry entry = cache[cache_idx];
+    while (entry.sector != sector_idx) {
+        lock_release(&entry.entry_lock);
+        cache_idx = find_cache_entry(sector_idx);
+    }
+    // Update flags
+    lock_acquire(&cache_lock);
+    entry.dirty = true;
+    entry.recent = true;
+    lock_release(&cache_lock);
 
+    ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
+    memcpy(entry.buffer + offset, buffer, size);
 }
 
 
