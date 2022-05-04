@@ -9,7 +9,7 @@
 
 struct bitmap;
 
-#define CACHE_SIZE 64
+#define CACHE_SIZE 20
 
 struct cache_entry {
     struct lock entry_lock;               /* Used to synchronize the access to each sector */
