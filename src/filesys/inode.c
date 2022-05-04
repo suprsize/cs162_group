@@ -6,17 +6,33 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+// TODO implement free map lock
+// TODO implement open_inodes lock:w
+
+/* List of open inodes, so that opening a single inode twice
+   returns the same `struct inode'. */
+static struct list open_inodes;
+
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+// METADATA contains size, owner, and access control
 struct inode_disk {
-  block_sector_t start; /* First data sector. */
   off_t length;         /* File size in bytes. */
+  uint32_t is_dir;      /* 1: is directory anything else: not director. */
+  block_sector_t direct_ptrs [12];
+  block_sector_t indirect_ptr;
+  block_sector_t doubly_ptr;
   unsigned magic;       /* Magic number. */
-  uint32_t unused[125]; /* Not used. */
+  uint32_t unused[111]; /* Not used. */
+};
+
+struct indirect_inode {
+  block_sector_t blocks[128];
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -30,7 +46,9 @@ struct inode {
   int open_cnt;           /* Number of openers. */
   bool removed;           /* True if deleted, false otherwise. */
   int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data; /* Inode content. */
+
+  struct lock resize_lock; /* Must be acquired if we ever want to resize a file. */
+  struct lock meta_lock; /* Must be acquired if we ever want to change metadata. */
 };
 
 /* Returns the block device sector that contains byte offset POS
@@ -39,18 +57,101 @@ struct inode {
    POS. */
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
+  char buf [512];
+  struct inode_disk* ind;
+  int index;
+  block_read(fs_device, inode->sector, &buf);
+  ind = (struct inode_disk*) buf;
+
+  /* We don't have data past the given size. */
+  if (pos > ind->length)
     return -1;
+
+  index = (int) (pos / BLOCK_SECTOR_SIZE);
+
+  /* Direct pointer */
+  if (index <= 11)
+    return ind->direct_ptrs[index];
+
+  struct indirect_inode l1_arr; /* Used for traversing the first level of indirect pointers. */
+  index -= 12;
+
+  /* Indirect pointer */
+  if (index <= 127) {
+    block_read(fs_device, ind->indirect_ptr, &l1_arr);
+    return l1_arr.blocks[index];
+  }
+
+  index -= 128;
+
+  /* Doubly indirect pointer */
+  /* Calculate l1 index */
+  int l1_index = index / 128;
+  struct indirect_inode l2_arr;
+
+  /* Calculate l2 index */
+  index -= (l1_index * 128);
+
+  block_read(fs_device, ind->doubly_ptr, &l1_arr);
+  block_read(fs_device, l1_arr.blocks[l1_index], &l2_arr);
+
+  return l2_arr.blocks[index];
 }
 
-/* List of open inodes, so that opening a single inode twice
-   returns the same `struct inode'. */
-static struct list open_inodes;
 
 /* Initializes the inode module. */
 void inode_init(void) { list_init(&open_inodes); }
+
+void get_inode_index_from_size (off_t size, int* l1_index, int* l2_index, int* l3_index) {
+  ASSERT(size >= 0);
+  ASSERT(l1_index != NULL);
+  ASSERT(l2_index != NULL);
+  ASSERT(l3_index != NULL);
+
+  *l1_index = (int) (size / BLOCK_SECTOR_SIZE);
+  *l2_index = -1;
+  *l3_index = -1;
+
+  // direct pointer
+  if (*l1_index <= 11)
+    return;
+
+  // indirect pointer
+  *l1_index -= 12;
+  *l2_index = *l1_index;
+  if (*l2_index <= 127) { 
+    *l1_index = -1;
+    return;
+  }
+
+  *l1_index -= 128;
+
+  // doubly pointer
+  *l2_index = (int) ((*l1_index) / 128);
+  *l3_index = (*l1_index) % 128;
+  *l1_index = -1;
+
+  return;
+}
+
+/* Resizes a disk inode (ind) with the new_length. */
+bool inode_resize (struct inode_disk* ind, off_t new_length) {
+
+  ASSERT(ind != NULL);
+  ASSERT(new_length >= 0);
+  int index;
+  off_t old_length = ind->length;
+
+  // TODO this assertion may not be neccesary
+  // and we may need to do something with it.
+  ASSERT(new_length >= old_length);
+  size_t num_sectors = bytes_to_sectors(new_length - old_length);
+
+  /* Populate with new sectors. */
+  for (int i = 0; i < num_sectors; i += 1) {
+  }
+
+}
 
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
