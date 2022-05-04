@@ -226,7 +226,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         ASSERT (l3_arr != NULL);
 
         // we don't need to traverse anymore
-        if (new_length <= (12 + 128 + (128 * i)) && (l2_arr[i] == 0)) {
+        if (new_length <= ((12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE) && (l2_arr[i] == 0)) {
           free(l3_arr);
           break;
         }
@@ -268,7 +268,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         }
 
         // shrink/remove the l3_arr if needed
-        if ((new_length <= (12 + 128 + (128 * i))) && (l2_arr[i] != 0)) {
+        if ((new_length <= (12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE) && (l2_arr[i] != 0)) {
           free_map_release(l2_arr[i], 1);
           l2_arr[i] = 0;
         }
@@ -278,7 +278,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         free(l3_arr);
     }
 
-    if ((ind->doubly_ptr != 0) && (new_length <= (128 + 12))) {
+    if ((ind->doubly_ptr != 0) && (new_length <= (128 + 12) * BLOCK_SECTOR_SIZE)) {
         free_map_release(ind->doubly_ptr, 1);
         ind->doubly_ptr = 0;
     } else {
