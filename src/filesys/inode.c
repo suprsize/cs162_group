@@ -211,6 +211,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
 
     // create the base doubly pointer.
     if (ind->doubly_ptr == 0 && (!free_map_allocate(1, &ind->doubly_ptr))) {
+        ind->doubly_ptr = 0;
         inode_resize(ind, ind->length);
         free(l2_arr);
         return false;
@@ -219,52 +220,71 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         block_read(fs_device, ind->doubly_ptr, l2_arr);
     }
 
+    // traverse the doubly pointer tree
     for (int i = 0; i < 128; i += 1) {
         block_sector_t* l3_arr = calloc(128, sizeof(block_sector_t));
         ASSERT (l3_arr != NULL);
-        memset(l3_arr, 0, BLOCK_SECTOR_SIZE);
 
-        if (l2_arr[i] != 0) {
-            block_read(fs_device, l2_arr[i], l3_arr);
-            
-            for (int j = 0; j < 128; j += 1) {
-                // shrink
-                if (l3_arr[j] != 0 && (new_length <= (128 + 12 + (i * 128) + j) * BLOCK_SECTOR_SIZE)) {
-                    free_map_release(l3_arr[j], 1);
-                    l3_arr[j] = 0;
-                // grow
-                } else if ((l3_arr[j] == 0) && (new_length > (128 + 12 + (i * 128) + j) * BLOCK_SECTOR_SIZE)) {
-                    if(!free_map_allocate(1, &l3_arr[j])) {
-                        free(l2_arr);
-                        free(l3_arr);
-                        block_write(fs_device, l2_arr[i], l3_arr);
-                        inode_resize(ind, ind->length);
-                        return false;
-                    }
-                }
-            }
-
-            block_write(fs_device, l2_arr[i], l3_arr); 
+        // we don't need to traverse anymore
+        if (new_length <= (12 + 128 + (128 * i)) && (l2_arr[i] == 0)) {
+          free(l3_arr);
+          break;
         }
 
-
-        // check if we still need the l3 tree 
-        if (l2_arr[i] != 0 && new_length <= (128 + 12 + (i * 128))) {
-            free_map_release(l2_arr[i], 1);
-            ind->indirect_ptr = 0;
-        } else {
+        // grow. 
+        if ((l2_arr[i] == 0)
+            && (new_length > (12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE)) {
+          if (! free_map_allocate(1, &l2_arr[i])) {
+            block_write(fs_device, ind->doubly_ptr, l2_arr);
             block_write(fs_device, l2_arr[i], l3_arr);
+            free(l3_arr);
+            free(l2_arr);
+            inode_resize(ind, ind->length);
+            return false;
+          }
         }
 
+        block_read(fs_device, l2_arr[i], l3_arr);
+
+        // TODO L3 traversal
+        for (int j = 0; j < 128; j += 1) {
+          // shrink
+          if ((new_length <= (12 + 128 + (128 * i) + j) * BLOCK_SECTOR_SIZE)
+              && l3_arr[j] != 0) {
+            free_map_release(l3_arr[j], 1);
+            l3_arr[j] = 0;
+          } else if ((new_length > ((12 + 128 + (128 * i) + j) * BLOCK_SECTOR_SIZE))
+              && (l3_arr[j] == 0)
+              ) {
+            if (!free_map_allocate(1, &l3_arr[j])) {
+              block_write(fs_device, ind->doubly_ptr, l2_arr);
+              block_write(fs_device, l2_arr[i], l3_arr);
+              inode_resize(ind, ind->length);
+              free(l2_arr);
+              free(l3_arr);
+              return false;
+            }
+          }
+        }
+
+        // shrink/remove the l3_arr if needed
+        if ((new_length <= (12 + 128 + (128 * i))) && (l2_arr[i] != 0)) {
+          free_map_release(l2_arr[i], 1);
+          l2_arr[i] = 0;
+        }
+
+
+        block_write(fs_device, l2_arr[i], l3_arr);
         free(l3_arr);
     }
 
     if ((ind->doubly_ptr != 0) && (new_length <= (128 + 12))) {
-        ind->doubly_ptr = 0;
         free_map_release(ind->doubly_ptr, 1);
+        ind->doubly_ptr = 0;
     } else {
         block_write(fs_device, ind->doubly_ptr, l2_arr);
     }
+
     free(l2_arr);
     return true;
 
