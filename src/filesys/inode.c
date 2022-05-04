@@ -153,13 +153,14 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         return true;
     }
 
-    block_sector_t indir_inode[128];
+    block_sector_t* indir_inode = calloc(128, sizeof(block_sector_t));
     memset(indir_inode, 0, BLOCK_SECTOR_SIZE);
 
     // need to grow 
     if (ind->indirect_ptr == 0) {
         if (!free_map_allocate(1, &ind->indirect_ptr)) {
             inode_resize(ind, ind->length);
+            free(indir_inode);
             return false;
         }
     } else {
@@ -179,7 +180,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
                 // we write so the resize can deallocate these things.
                 block_write(fs_device, ind->indirect_ptr, indir_inode);
                 inode_resize(ind, ind->length);
-
+                free(indir_inode);
                 return false;
             }
         }
@@ -193,6 +194,8 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         block_write(fs_device, ind->indirect_ptr, indir_inode);
     }
 
+    free(indir_inode);
+
     /* Doubly indirect pointer */
 
     if ((ind->doubly_ptr == 0) && (new_length <= (12 + 128) * BLOCK_SECTOR_SIZE)) { 
@@ -201,12 +204,15 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
     }
 
     // base level of the doubly pointer
-    block_sector_t l2_arr[128];
+    block_sector_t* l2_arr = calloc(128, sizeof(block_sector_t));
+    ASSERT (l2_arr != NULL);
+
     memset(l2_arr, 0, BLOCK_SECTOR_SIZE);
 
     // create the base doubly pointer.
     if (ind->doubly_ptr == 0 && (!free_map_allocate(1, &ind->doubly_ptr))) {
         inode_resize(ind, ind->length);
+        free(l2_arr);
         return false;
     } else {
         // read that shit in
@@ -214,7 +220,8 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
     }
 
     for (int i = 0; i < 128; i += 1) {
-        block_sector_t l3_arr[128];
+        block_sector_t* l3_arr = calloc(128, sizeof(block_sector_t));
+        ASSERT (l3_arr != NULL);
         memset(l3_arr, 0, BLOCK_SECTOR_SIZE);
 
         if (l2_arr[i] != 0) {
@@ -228,6 +235,8 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
                 // grow
                 } else if ((l3_arr[j] == 0) && (new_length > (128 + 12 + (i * 128) + j) * BLOCK_SECTOR_SIZE)) {
                     if(!free_map_allocate(1, &l3_arr[j])) {
+                        free(l2_arr);
+                        free(l3_arr);
                         block_write(fs_device, l2_arr[i], l3_arr);
                         inode_resize(ind, ind->length);
                         return false;
@@ -246,6 +255,8 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         } else {
             block_write(fs_device, l2_arr[i], l3_arr);
         }
+
+        free(l3_arr);
     }
 
     if ((ind->doubly_ptr != 0) && (new_length <= (128 + 12))) {
@@ -254,7 +265,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
     } else {
         block_write(fs_device, ind->doubly_ptr, l2_arr);
     }
-
+    free(l2_arr);
     return true;
 
 }
