@@ -294,6 +294,7 @@ off_t inode_length(const struct inode* inode) { return inode->data.length; }
 
 void cache_init() {
     lock_init(&cache_lock);
+    lock_acquire(&cache_lock);
     clock_index = 0;
     for (int i = 0; i < CACHE_SIZE; i++) {
         cache[i].valid = false;
@@ -301,6 +302,7 @@ void cache_init() {
         cache[i].recent = false;
         lock_init(&cache[i].entry_lock);
     }
+    lock_release(&cache_lock);
 }
 
 // Must hold the global Lock before calling this function
@@ -383,7 +385,16 @@ void cache_write(struct block* drive, block_sector_t sector_idx, const void* buf
     lock_release(&entry->entry_lock);
 }
 
-
+void cache_flush() {
+    lock_acquire(&cache_lock);
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (cache[i].valid && cache[i].dirty) {
+            block_write(fs_device, cache[i].sector, cache[i].buffer);
+            cache[i].dirty = false;
+        }
+    }
+    lock_release(&cache_lock);
+}
 
 
 

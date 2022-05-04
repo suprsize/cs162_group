@@ -24,18 +24,17 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 
-/* A list of all processes */
-struct list pcb_list;
-struct lock pcb_list_lock;
-
 struct myFile {
   struct file* file_ptr;
   struct list_elem elem;
 };
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
+bool populate_pcb(struct process* pcb);
+struct retval* generate_retval();
+void init_fd_table();
+struct myFile* get_myFile(int fd);
 
 /* Generates a retval struct so procs can read/write exit
  * codes in a synchronized manner.*/
@@ -448,7 +447,6 @@ static void start_process(void* args) {
 
   char *token, *save_ptr; int _size;
   
-  char NULL_TERMINATOR = 0x0;
   for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
     token = strtok_r(NULL, " ", &save_ptr)) {
       /* Find size of each token to push onto stack */
