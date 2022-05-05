@@ -17,6 +17,7 @@ struct dir_entry {
   block_sector_t inode_sector; /* Sector number of header. */
   char name[NAME_MAX + 1];     /* Null terminated file name. */
   bool in_use;                 /* In use or free? */
+  bool is_dir;                 /* Is the entry for a dir */
 };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -70,7 +71,7 @@ struct inode* dir_get_inode(struct dir* dir) {
    if EP is non-null, and sets *OFSP to the byte offset of the
    directory entry if OFSP is non-null.
    otherwise, returns false and ignores EP and OFSP. */
-static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep, off_t* ofsp) {
+static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep, off_t* ofsp, bool* is_dir) {
   struct dir_entry e;
   size_t ofs;
 
@@ -83,6 +84,8 @@ static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep
         *ep = e;
       if (ofsp != NULL)
         *ofsp = ofs;
+      if (is_dir != NULL)
+        *is_dir = e.is_dir;
       return true;
     }
   return false;
@@ -92,13 +95,13 @@ static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep
    and returns true if one exists, false otherwise.
    On success, sets *INODE to an inode for the file, otherwise to
    a null pointer.  The caller must close *INODE. */
-bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode) {
+bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode, bool* is_dir) {
   struct dir_entry e;
 
   ASSERT(dir != NULL);
   ASSERT(name != NULL);
 
-  if (lookup(dir, name, &e, NULL))
+  if (lookup(dir, name, &e, NULL, is_dir))
     *inode = inode_open(e.inode_sector);
   else
     *inode = NULL;
@@ -112,7 +115,7 @@ bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode) {
    Returns true if successful, false on failure.
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
-bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
+bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector, bool is_dir) {
   struct dir_entry e;
   off_t ofs;
   bool success = false;
@@ -125,7 +128,7 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
     return false;
 
   /* Check that NAME is not in use. */
-  if (lookup(dir, name, NULL, NULL))
+  if (lookup(dir, name, NULL, NULL, NULL))
     goto done;
 
   /* Set OFS to offset of free slot.
@@ -141,6 +144,7 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
 
   /* Write slot. */
   e.in_use = true;
+  e.is_dir = is_dir;
   strlcpy(e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
@@ -162,7 +166,7 @@ bool dir_remove(struct dir* dir, const char* name) {
   ASSERT(name != NULL);
 
   /* Find directory entry. */
-  if (!lookup(dir, name, &e, &ofs))
+  if (!lookup(dir, name, &e, &ofs, NULL))
     goto done;
 
   /* Open inode. */
@@ -198,4 +202,30 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
     }
   }
   return false;
+}
+
+
+
+/* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
+   next call will return the next file name part. Returns 1 if successful, 0 at
+   end of string, -1 for a too-long file name part. */
+static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
+    const char* src = *srcp;
+    char* dst = part;
+    /* Skip leading slashes.  If it's all slashes, we're done. */
+    while (*src == '/')
+        src++;
+    if (*src == '\0')
+        return 0;
+    /* Copy up to NAME_MAX character from SRC to DST.  Add null terminator. */
+    while (*src != '/' && *src != '\0') {
+        if (dst < part + NAME_MAX)
+            *dst++ = *src;
+        else
+            return -1;
+        src++; }
+    *dst = '\0';
+    /* Advance source pointer. */
+    *srcp = src;
+    return 1;
 }
