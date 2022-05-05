@@ -30,6 +30,7 @@ struct lock pcb_list_lock;
 
 struct myFile {
   struct file* file_ptr;
+  struct dir* dir_ptr;
   struct list_elem elem;
 };
 
@@ -101,6 +102,9 @@ bool populate_pcb(struct process* pcb) {
   list_init(&(pcb->file_descriptors));
   list_init(&(pcb->children));
 
+  t->pcb->cwd_sector = ROOT_DIR_SECTOR;
+  t->pcb->cwd_name = NULL;
+
   return true;
 }
 
@@ -131,9 +135,6 @@ void userprog_init(void) {
   lock_acquire(&(pcb_list_lock));
   list_push_back(&(pcb_list), &(t->pcb->elem));
   lock_release(&(pcb_list_lock));
-  // Initialized current working directory sector and name
-  t->pcb->cwd_sector = ROOT_DIR_SECTOR;
-  t->pcb->cwd_name = NULL;
 
   /* There is no parent of the init process. Retval of this is only referneced by me. */
   t->pcb->retval->ref_cnt = 1;

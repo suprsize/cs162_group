@@ -238,7 +238,8 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
     return 1;
 }
 
-//TODO: MAKE SURE REOPEN CAN'T OPEN A REMOVED INODE, CLOSE OPENED INODES
+
+//TODO: MAKE SURE REOPEN CAN'T OPEN A REMOVED INODE
 bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct inode** parent_inode, struct inode** inode, bool* is_dir) {
     ASSERT(path != NULL);
     /* Check NAME for validity. */
@@ -249,18 +250,18 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
     struct inode* dir_inode = NULL;
     dir_inode = inode_open(start_dir_sector);
     if (dir_inode == NULL)
-        *is_dir = true;
-    else
         return false;
+    *is_dir = true;
     *parent_inode = NULL;
     *inode = NULL;
     struct dir* parent_directory = NULL;
     char name[NAME_MAX + 1];
     while (get_next_part(name, &path) > 0) {
-        if (!*is_dir) {
+        if (!(*is_dir)) {
             success = false;
             break;
         }
+        *parent_inode = dir_inode;
         parent_directory = dir_open(dir_inode);
         if (parent_directory == NULL) {
             success = false;
@@ -273,8 +274,7 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
             break;
         }
         dir_close(parent_directory);
-        inode_close(*parent_inode);
-        *parent_inode = dir_inode;
+        inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
         dir_inode = *inode;
         success = true;
     }

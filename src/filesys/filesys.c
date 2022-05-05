@@ -6,6 +6,9 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
+
 
 /* Partition that contains the file system. */
 struct block* fs_device;
@@ -38,7 +41,13 @@ void filesys_done(void) { free_map_close(); }
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   block_sector_t inode_sector = 0;
-  struct dir* dir = dir_open_root();
+  struct dir* dir = dir_open_cwd();
+//  block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+//  bool is_child_dir = false;
+//  struct inode* parent_inode = NULL;
+//  struct inode* child_inode = NULL;
+//  dir_lookup_deep(start_sector, name, &parent_inode, &child_inode, &is_child_dir);
+//
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, name, inode_sector, is_dir));
   if (!success && inode_sector != 0)
@@ -54,7 +63,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = dir_open_cwd();
   struct inode* inode = NULL;
 
   if (dir != NULL)
@@ -69,7 +78,7 @@ struct file* filesys_open(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = dir_open_cwd();
   bool success = dir != NULL && dir_remove(dir, name);
   dir_close(dir);
 
