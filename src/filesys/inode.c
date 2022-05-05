@@ -236,7 +236,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
             && (new_length > (12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE)) {
           if (! free_map_allocate(1, &l2_arr[i])) {
             block_write(fs_device, ind->doubly_ptr, l2_arr);
-            block_write(fs_device, l2_arr[i], l3_arr);
+//TODO:            block_write(fs_device, l2_arr[i], l3_arr);
             free(l3_arr);
             free(l2_arr);
             inode_resize(ind, ind->length);
@@ -271,10 +271,10 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         if ((new_length <= (12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE) && (l2_arr[i] != 0)) {
           free_map_release(l2_arr[i], 1);
           l2_arr[i] = 0;
+        } else {
+            //TODO MOH: ADDED AN ELSE
+            block_write(fs_device, l2_arr[i], l3_arr);
         }
-
-
-        block_write(fs_device, l2_arr[i], l3_arr);
         free(l3_arr);
     }
 
@@ -285,6 +285,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         block_write(fs_device, ind->doubly_ptr, l2_arr);
     }
 
+    ind->length = new_length;
     free(l2_arr);
     return true;
 
@@ -307,7 +308,7 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
 
   disk_inode = calloc(1, sizeof *disk_inode);
   if (disk_inode != NULL) {
-    disk_inode->length = length;
+//    disk_inode->length = length;
     // TODO we may create a directory inode..
     disk_inode->is_dir = is_dir;
     disk_inode->magic = INODE_MAGIC;
