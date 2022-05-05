@@ -131,6 +131,9 @@ void userprog_init(void) {
   lock_acquire(&(pcb_list_lock));
   list_push_back(&(pcb_list), &(t->pcb->elem));
   lock_release(&(pcb_list_lock));
+  // Initialized current working directory sector and name
+  t->pcb->cwd_sector = ROOT_DIR_SECTOR;
+  t->pcb->cwd_name = NULL;
 
   /* There is no parent of the init process. Retval of this is only referneced by me. */
   t->pcb->retval->ref_cnt = 1;
@@ -185,8 +188,6 @@ pid_t process_execute(const char* file_name) {
    * retval struct. */
   sema_down(&(child_thread->pcb_ready));
   child_pcb = child_thread->pcb;
-
-
   // Neccesary.
   // there is a chance that PCB allocation fails.
   if (child_pcb == NULL)  {
@@ -197,6 +198,10 @@ pid_t process_execute(const char* file_name) {
   lock_acquire(&(pcb_list_lock));
   list_push_back(&(pcb_list), &(child_pcb->elem));
   lock_release(&(pcb_list_lock));
+
+  // Initialize the current working director of the child to same cwd as parent
+  child_pcb->cwd_name = current_pcb->cwd_name;
+  child_pcb->cwd_sector = current_pcb->cwd_sector;
 
   child_retval = child_pcb->retval;
 

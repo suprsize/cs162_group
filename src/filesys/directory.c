@@ -5,6 +5,8 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* A directory. */
 struct dir {
@@ -45,6 +47,11 @@ struct dir* dir_open(struct inode* inode) {
    Return true if successful, false on failure. */
 struct dir* dir_open_root(void) {
   return dir_open(inode_open(ROOT_DIR_SECTOR));
+}
+
+struct dir* dir_open_cwd(void) {
+  struct thread* t = thread_current();
+  return dir_open(inode_open(t->pcb->cwd_sector));
 }
 
 /* Opens and returns a new directory for the same inode as DIR.

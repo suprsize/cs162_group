@@ -44,7 +44,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
 
-        f->eax = filesys_create(filename, initial_size);
+        f->eax = filesys_create(filename, initial_size, false);
 
         lock_release(file_lock);
         break;
@@ -191,6 +191,41 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        lock_release(file_lock);
        break;
      }
+
+      case SYS_CHDIR: {
+          int fd = args[1];
+          lock_acquire(file_lock);
+          lock_release(file_lock);
+          break;
+      }
+
+      case SYS_MKDIR: {
+          int fd = args[1];
+          lock_acquire(file_lock);
+          lock_release(file_lock);
+          break;
+      }
+
+      case SYS_READDIR: {
+          int fd = args[1];
+          lock_acquire(file_lock);
+          lock_release(file_lock);
+          break;
+      }
+
+      case SYS_ISDIR: {
+          int fd = args[1];
+          lock_acquire(file_lock);
+          lock_release(file_lock);
+          break;
+      }
+
+      case SYS_INUMBER: {
+          int fd = args[1];
+          lock_acquire(file_lock);
+          lock_release(file_lock);
+          break;
+      }
 
     case SYS_PRACTICE:
       f->eax = args[1] + 1;

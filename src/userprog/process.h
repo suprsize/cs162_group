@@ -2,6 +2,8 @@
 #define USERPROG_PROCESS_H
 #include "threads/thread.h"
 #include "filesys/file.h"
+#include "devices/block.h"
+
 #include <stdint.h>
 
 // At most 8MB can be allocated to the stack
@@ -56,11 +58,12 @@ struct process {
   /* Owned by process.c. */
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
+  char* cwd_name;
+  block_sector_t cwd_sector;
   struct thread* main_thread; /* Pointer to main thread */
   int fd_index;               /* Index of newest file descriptor. */
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
-
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
   struct list_elem elem; /* List element so parent can keep track of stuff. */
