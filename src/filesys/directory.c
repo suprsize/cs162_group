@@ -223,9 +223,34 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
             *dst++ = *src;
         else
             return -1;
-        src++; }
+        src++;
+    }
     *dst = '\0';
     /* Advance source pointer. */
     *srcp = src;
     return 1;
+}
+
+
+bool dir_lookup_deep(const struct dir*, const char* path, struct inode**, bool* is_dir) {
+    block_sector_t dir_sector = ROOT_DIR_SECTOR;
+    struct dir_entry e;
+    struct inode* dir_inode = NULL;
+    bool is_dir = true;
+    bool success = false;
+
+    ASSERT(dir != NULL);
+    ASSERT(path != NULL);
+
+    /* Check NAME for validity. */
+    if (*path == '\0')
+        return false;
+
+    dir_inode = inode_open(dir_sector);
+    char name[NAME_MAX + 1];
+    while (is_dir && (get_next_part(name, &path) == 1)) {
+        struct dir* directory = dir_open(dir_inode);
+        dir_lookup(directory, name, &dir_inode, &is_dir);
+    }
+    
 }
