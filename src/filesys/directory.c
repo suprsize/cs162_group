@@ -247,12 +247,11 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
         return false;
 
     bool success = false;
-    struct inode* dir_inode = NULL;
-    dir_inode = inode_open(start_dir_sector);
-    if (dir_inode == NULL)
+    *inode = inode_open(start_dir_sector);
+    if (*inode == NULL)
         return false;
-    *is_dir = true;
     *parent_inode = NULL;
+    *is_dir = true;
     *inode = NULL;
     struct dir* parent_directory = NULL;
     char name[NAME_MAX + 1];
@@ -261,8 +260,10 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
             success = false;
             break;
         }
-        *parent_inode = dir_inode;
-        parent_directory = dir_open(dir_inode);
+        inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
+        *parent_inode = *inode;
+        *inode = NULL;
+        parent_directory = dir_open(*parent_inode);
         if (parent_directory == NULL) {
             success = false;
             break;
@@ -274,14 +275,13 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
             break;
         }
         dir_close(parent_directory);
-        inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
-        dir_inode = *inode;
         success = true;
     }
     if (!success || get_next_part(name, &path) != 0) {
-        dir_close(parent_directory);
         inode_close(*parent_inode);
         inode_close(*inode);
+        *parent_inode = NULL;
+        *inode = NULL;
         return false;
     }
     return true;
