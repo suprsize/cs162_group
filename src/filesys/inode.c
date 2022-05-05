@@ -22,13 +22,15 @@ static struct list open_inodes;
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 // METADATA contains size, owner, and access control
 struct inode_disk {
+  struct lock* resize_lock;
+  block_sector_t sector;
   off_t length;         /* File size in bytes. */
   uint32_t is_dir;      /* 1: is directory anything else: not director. */
   block_sector_t direct_ptrs [12];
   block_sector_t indirect_ptr;
   block_sector_t doubly_ptr;
   unsigned magic;       /* Magic number. */
-  uint32_t unused[111]; /* Not used. */
+  uint32_t unused[109]; /* Not used. */
 };
 
 struct indirect_inode {
@@ -291,6 +293,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
 
 }
 
+
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
    device.
@@ -310,13 +313,19 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
   if (disk_inode != NULL) {
 //    disk_inode->length = length;
     // TODO we may create a directory inode..
+    disk_inode->resize_lock = malloc(sizeof(struct lock));
+    ASSERT(disk_inode->resize_lock != NULL);
+    lock_init(disk_inode->resize_lock);
+    lock_acquire(disk_inode->resize_lock);
+
     disk_inode->is_dir = is_dir;
     disk_inode->magic = INODE_MAGIC;
+    disk_inode->sector = sector;
     success = inode_resize(disk_inode, length);
 
     if (success)
         block_write(fs_device, sector, disk_inode);
-
+    lock_release(disk_inode->resize_lock);
     free(disk_inode);
   }
   return success;
@@ -379,8 +388,10 @@ void inode_close(struct inode* inode) {
     if (inode->removed) {
       struct inode_disk ind;
       block_read(fs_device, inode->sector, &ind);
+      lock_acquire(&ind.resize_lock);
+      //TODO: DO BLOCK READ
       inode_resize(&ind, 0);
-
+      lock_release(&ind.resize_lock);
       free_map_release(inode->sector, 1);
     }
 
@@ -470,8 +481,14 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   block_read(fs_device, inode->sector, buf);
   ind = (struct inode_disk*) buf;
 
-  if ((ind->length < size + offset) && (!inode_resize(ind, size + offset))) {
-      return 0;
+  if ((ind->length < size + offset)) {
+      lock_acquire(ind->resize_lock);
+      block_read(fs_device, inode->sector, buf);
+      if ((ind->length < size + offset) && (!inode_resize(ind, size + offset))) {
+          lock_release(ind->resize_lock);
+          return 0;
+      }
+      lock_release(ind->resize_lock);
   }
   block_write(fs_device, inode_get_inumber(inode), ind);
 
