@@ -231,38 +231,46 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
     return 1;
 }
 
-
-bool dir_lookup_deep(char* path,struct inode** parent_inode, struct inode** inode, bool* is_dir) {
-    struct inode* dir_inode = NULL;
-    bool success = true;
-
+//TODO: MAKE SURE REOPEN CAN'T OPEN A REMOVED INODE, CLOSE OPENED INODES
+bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct inode** parent_inode, struct inode** inode, bool* is_dir) {
     ASSERT(path != NULL);
-
     /* Check NAME for validity. */
     if (*path == '\0')
         return false;
 
-    dir_inode = inode_open(ROOT_DIR_SECTOR);
-    if (dir_inode != NULL)
-        is_dir = true;
-    *parent_inode = dir_inode;
+    bool success = false;
+    struct inode* dir_inode = NULL;
+    dir_inode = inode_open(start_dir_sector);
+    if (dir_inode == NULL)
+        *is_dir = true;
+    else
+        return false;
+    *parent_inode = NULL;
     *inode = NULL;
     char name[NAME_MAX + 1];
     while (get_next_part(name, &path) > 0) {
-        if (!is_dir) {
+        if (!*is_dir) {
             success = false;
             break;
         }
+        inode_close(*parent_inode);
         *parent_inode = dir_inode;
         struct dir* parent_directory = dir_open(dir_inode);
+        if (parent_directory == NULL) {
+            success = false;
+            break;
+        }
         if (!dir_lookup(parent_directory, name, inode, is_dir)) {
             *inode = NULL;
-            is_dir = false;
+            *is_dir = false;
             break;
         }
         dir_inode = *inode;
+        success = true;
     }
     if (success == false || get_next_part(name, &path) != 0) {
+        inode_close(*parent_inode);
+        inode_close(*inode);
         return false;
     }
     return true;
