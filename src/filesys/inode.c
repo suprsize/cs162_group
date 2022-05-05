@@ -473,6 +473,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   if ((ind->length < size + offset) && (!inode_resize(ind, size + offset))) {
       return 0;
   }
+  block_write(fs_device, inode_get_inumber(inode), ind);
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
@@ -519,6 +520,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   }
   free(bounce);
 
+  block_write(fs_device, inode_get_inumber(inode), ind);
   return bytes_written;
 }
 
