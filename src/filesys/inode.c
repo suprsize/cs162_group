@@ -388,10 +388,10 @@ void inode_close(struct inode* inode) {
     if (inode->removed) {
       struct inode_disk ind;
       block_read(fs_device, inode->sector, &ind);
-      lock_acquire(&ind.resize_lock);
+      lock_acquire(ind.resize_lock);
       //TODO: DO BLOCK READ
       inode_resize(&ind, 0);
-      lock_release(&ind.resize_lock);
+      lock_release(ind.resize_lock);
       free_map_release(inode->sector, 1);
     }
 
