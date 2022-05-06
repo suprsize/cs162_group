@@ -96,9 +96,31 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
+    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    bool is_child_dir = false;
+    struct inode *parent_inode = NULL;
+    struct inode *child_inode = NULL;
+    char *name_dummy = name;
+    struct file *file_ptr = NULL;
+    bool done = false;
+    bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
+    if (success) {
+        if (child_inode == NULL || is_child_dir) {
+            inode_close(child_inode);
+            success = false;
+        } else {
+            done = true;
+            file_ptr = file_open(child_inode);
+        }
+        inode_close(parent_inode);
+    }
+    if (done)
+        return file_ptr;
+    return file_ptr;
+}
+struct file* filesys_open2(const char* name) {
   struct dir* dir = dir_open_cwd();
   struct inode* inode = NULL;
-
   if (dir != NULL)
     dir_lookup(dir, name, &inode, NULL);
   dir_close(dir);
