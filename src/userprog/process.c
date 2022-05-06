@@ -28,12 +28,6 @@
 struct list pcb_list;
 struct lock pcb_list_lock;
 
-struct myFile {
-  struct file* file_ptr;
-  struct dir* dir_ptr;
-  struct list_elem elem;
-};
-
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
@@ -264,18 +258,16 @@ bool is_valid_ptr(void* ptr) {
 }
 
 /* Adds a file descriptor to the current process. */
-int add_fd(struct file* theFile) {
+int add_fd(struct myFile *my_file) {
   /* File can't be a dummy or NULL */
-  if (theFile == NULL
-      || theFile->inode == NULL) {
+  if (my_file == NULL
+      || (my_file->file_ptr == NULL && my_file->dir_ptr == NULL)) {
     return -1;
   }
 
   struct process* process = thread_current()->pcb;
-  struct myFile* newFile = (struct myFile*) malloc(sizeof (struct myFile));
-  newFile->file_ptr = theFile;
   /* Add file to file descriptor table. */
-  list_push_back(&process->file_descriptors, &newFile->elem);
+  list_push_back(&process->file_descriptors, &my_file->elem);
 
   /* Updates the file descriptor index to the latest. */
   process->fd_index += 1;
@@ -292,6 +284,7 @@ struct myFile* get_myFile(int fd) {
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     if (i++ == fd) { // i++ increments _after_ evaluating
       struct myFile* f = list_entry(e, struct myFile, elem);
+      //TODO: NEED TO CHANGE TO SUPPORT DIR
       if (f->file_ptr != NULL) // checks that the file descriptor is not closed.
         return f;
       return NULL; // file is closed.
@@ -813,8 +806,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
+  //TODO: ----------MIGHT HAVE TO MAKE SURE THAT IT IS ACTUALLY A FILE AND NOT A DIR----------------
   /* Open executable file. */
-  file = filesys_open(file_name);
+  file = filesys_open(file_name)->file_ptr;
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;

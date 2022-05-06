@@ -2,6 +2,8 @@
 #define USERPROG_PROCESS_H
 #include "threads/thread.h"
 #include "filesys/file.h"
+#include "filesys/filesys.h"
+
 #include "devices/block.h"
 
 #include <stdint.h>
@@ -21,7 +23,7 @@ void close_file(int fd);
 struct process* get_pcb_by_name(char* filename);
 
 /* Custom filesys functions. */
-int add_fd(struct file * file_descriptor);
+int add_fd(struct myFile *my_file);
 
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */

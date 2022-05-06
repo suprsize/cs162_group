@@ -74,10 +74,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
 
-        struct file* opened_file = filesys_open(filename);
+        struct myFile* opened_file = filesys_open(filename);
 
         if (get_pcb_by_name(filename) != NULL) {
-          file_deny_write(opened_file);
+          file_deny_write(opened_file->file_ptr);
         }
 
         f->eax = add_fd(opened_file);
@@ -207,10 +207,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_MKDIR: {
           char *filename = args[1];
           //TODO: CHANGE SIZE OF ENTRIES
-          unsigned int initial_size = 15;
+          unsigned int initial_entries = 15;
           if (is_valid_ptr(filename)) {
               lock_acquire(file_lock);
-              f->eax = filesys_create(filename, initial_size, true);
+              f->eax = filesys_create(filename, initial_entries, true);
               lock_release(file_lock);
               break;
           }
