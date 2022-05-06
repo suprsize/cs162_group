@@ -285,7 +285,7 @@ struct myFile* get_myFile(int fd) {
     if (i++ == fd) { // i++ increments _after_ evaluating
       struct myFile* f = list_entry(e, struct myFile, elem);
       //TODO: NEED TO CHANGE TO SUPPORT DIR
-      if (f->file_ptr != NULL) // checks that the file descriptor is not closed.
+      if (f->file_ptr != NULL || f->dir_ptr != NULL) // checks that the file descriptor is not closed.
         return f;
       return NULL; // file is closed.
     }
@@ -375,6 +375,10 @@ void close_file(int fd) {
       file_close(f->file_ptr);
       // To indicate that the file descriptor has been close.
       f->file_ptr = NULL;
+    } else if (f->dir_ptr != NULL) {
+        dir_close(f->dir_ptr);
+        // To indicate that the file descriptor has been close.
+        f->dir_ptr = NULL;
     }
   } else {
     exit_with_error();
