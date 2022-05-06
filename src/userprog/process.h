@@ -14,7 +14,8 @@ bool is_valid_args(void* stack_ptr, int argc);
 struct file* get_file(int fd);
 int read_file(int fd, uint32_t* buffer, size_t count);
 int write_file(int fd, uint32_t* buffer, size_t count);
-
+void close_file(int fd);
+struct process* get_pcb_by_name(char* filename);
 
 /* Custom filesys functions. */
 int add_fd(struct file * file_descriptor);
@@ -44,7 +45,9 @@ struct retval {
   struct list_elem elem; /* List element so parent can keep track of stuff. */
 };
 
-struct list pcb_list; /* A list of all processes */
+/* A list of all processes */
+struct list pcb_list;
+struct lock pcb_list_lock;
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
