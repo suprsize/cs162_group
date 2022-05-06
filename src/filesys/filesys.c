@@ -56,7 +56,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   bool success = false;
   bool done = false;
   char * name_dummy = name;
-  char last_name[NAME_MAX + 1];
+  char last_name[NAME_MAX + 1]; // TODO: TEMP FIX : make a big buffer so if the last name is big we can return false
   if (is_dir) {
       //initial_size passed in is number of entries in the directory not the actual size
       initial_size *= sizeof (struct dir_entry);
@@ -70,7 +70,14 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
       } else {
           struct dir* dir = dir_open(parent_inode);
           //TODO: THE NAME NEEDS TO BE A NAME AND NOT A PATH
-          while(get_next_part(last_name, &name) > 0) {
+          int read = get_next_part(last_name, &name);
+          while(read == 1) {
+              read = get_next_part(last_name, &name);
+          }
+          if (read == -1) {
+              // getting last name give error so abort
+              dir_close(dir);
+              return false;
           }
           success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                      inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, last_name, inode_sector, is_dir));
@@ -93,7 +100,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
       }
   }
   if (done)
-      return true;
+      return success;
 
   return success;
 }
@@ -197,7 +204,14 @@ bool filesys_remove(const char* name) {
             if (!is_dir_empty(dir))
                 success = false;
             else {
-                while(get_next_part(last_name, &name) > 0) {
+                int read = get_next_part(last_name, &name);
+                while(read == 1) {
+                    read = get_next_part(last_name, &name);
+                }
+                if (read == -1) {
+                    // getting last name give error so abort
+                    dir_close(dir);
+                    return false;
                 }
                 //Don't close parent_inode bkz dir_close does
                 success = dir != NULL && dir_remove(dir, last_name);
