@@ -19,6 +19,9 @@ struct file* get_file(int fd);
 int read_file(int fd, uint32_t* buffer, size_t count);
 int write_file(int fd, uint32_t* buffer, size_t count);
 void close_file(int fd);
+bool do_readdir(int fd, char* name_buffer);
+bool do_is_dir(int fd);
+int fd_to_inumber(int fd);
 
 struct process* get_pcb_by_name(char* filename);
 

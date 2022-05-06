@@ -385,6 +385,35 @@ void close_file(int fd) {
   }
 }
 
+// The name size might be an issue since dir_readdir has a size limit on name
+bool do_readdir(int fd, char* name_buffer) {
+    struct myFile* f = get_myFile(fd);
+    if (f != NULL && f->dir_ptr != NULL) {
+        return dir_readdir(f->dir_ptr, name_buffer);
+    }
+    return false;
+}
+
+bool do_is_dir(int fd) {
+    struct myFile* f = get_myFile(fd);
+    return (f != NULL  && f->dir_ptr != NULL);
+}
+
+int fd_to_inumber(int fd) {
+    struct myFile* f = get_myFile(fd);
+    block_sector_t inum = -1;
+    if (f != NULL) {
+        struct inode* inode = NULL;
+        if (f->dir_ptr != NULL) {
+            inode = dir_get_inode(f->dir_ptr);
+        } else if (f->file_ptr != NULL) {
+            inode = file_get_inode(f->file_ptr);
+        }
+        inum = inode_get_inumber(inode);
+    }
+    inum;
+}
+
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* args) {

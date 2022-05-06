@@ -130,7 +130,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
      case SYS_WRITE: {
          //TODO: ERROR ON DIR
-         int fd = args[1];
+       int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
        // TODO double check validation
@@ -220,8 +220,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
       case SYS_READDIR: {
           int fd = args[1];
+          // TODO: NEED VALIDATE THE THE BUFFER
+          char* name_buffer = args[2];
           lock_acquire(file_lock);
-
+          f->eax = do_readdir(fd, name_buffer);
           lock_release(file_lock);
           break;
       }
@@ -229,7 +231,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_ISDIR: {
           int fd = args[1];
           lock_acquire(file_lock);
-
+          f->eax = do_is_dir(fd);
           lock_release(file_lock);
           break;
       }
@@ -237,6 +239,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_INUMBER: {
           int fd = args[1];
           lock_acquire(file_lock);
+          f->eax = fd_to_inumber(fd);
           lock_release(file_lock);
           break;
       }
