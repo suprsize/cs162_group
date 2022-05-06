@@ -39,7 +39,10 @@ enum {
   SYS_MKDIR,   /* Create a directory. */
   SYS_READDIR, /* Reads a directory entry. */
   SYS_ISDIR,   /* Tests if a fd represents a directory. */
-  SYS_INUMBER  /* Returns the inode number for a fd. */
+  SYS_INUMBER,  /* Returns the inode number for a fd. */
+
+  SYS_BLOCK_READS, /* Returns the number of total disk reads */
+  SYS_BLOCK_WRITES /* Returns the number of total disk writes */
 };
 
 #endif /* lib/syscall-nr.h */

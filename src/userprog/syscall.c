@@ -7,6 +7,7 @@
 #include "userprog/exception.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
+#include "devices/block.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -36,6 +37,15 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
 
+    case SYS_BLOCK_READS: {
+      f->eax = get_total_reads();
+      break;
+    }
+
+    case SYS_BLOCK_WRITES: {
+      f->eax = get_total_writes();
+      break;
+    }
 
     case SYS_CREATE: {
       char *filename = args[1];

@@ -121,6 +121,31 @@ const char* block_name(struct block* block) { return block->name; }
 /* Returns BLOCK's type. */
 enum block_type block_type(struct block* block) { return block->type; }
 
+/* Testing */
+
+int get_total_writes(void) {
+  unsigned long long retval = 0;
+  for (int i = 0; i < BLOCK_ROLE_CNT; i++) {
+    struct block* block = block_by_role[i];
+    if (block != NULL) {
+      retval += block->write_cnt;
+    }
+  }
+  return retval;
+}
+
+
+int get_total_reads(void) {
+  unsigned long long retval = 0;
+  for (int i = 0; i < BLOCK_ROLE_CNT; i++) {
+    struct block* block = block_by_role[i];
+    if (block != NULL) {
+      retval += block->read_cnt;
+    }
+  }
+  return retval;
+}
+
 /* Prints statistics for each block device used for a Pintos role. */
 void block_print_stats(void) {
   int i;
