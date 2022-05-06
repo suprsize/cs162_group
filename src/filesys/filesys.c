@@ -31,6 +31,10 @@ void filesys_init(bool format) {
     do_format();
 
   free_map_open();
+
+    struct dir* dir = dir_open_root();
+    dir_add(dir, ".", ROOT_DIR_SECTOR, true);
+    dir_close(dir);
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -42,6 +46,8 @@ void filesys_done(void) { free_map_close(); }
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
+  if (*name == '\0')
+      return false;
   block_sector_t inode_sector = 0;
   block_sector_t start_sector = thread_current()->pcb->cwd_sector;
   bool is_child_dir = false;
@@ -72,13 +78,14 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
               success = false;
               free_map_release(inode_sector, 1);
           } else {
-//              if (is_dir) {
-//                  struct dir* created_dir = dir_open(inode_open(inode_sector));
-//                  dir_add(created_dir, ".", inode_sector, true);
-//                  block_sector_t parent_sector = inode_get_inumber(parent_inode);
-//                  dir_add(created_dir, "..", parent_sector, true);
-//                  dir_close(created_dir);
-//              }
+              if (is_dir) {
+                  // Add . and .. to the director
+                  struct dir* created_dir = dir_open(inode_open(inode_sector));
+                  dir_add(created_dir, ".", inode_sector, true);
+                  block_sector_t parent_sector = inode_get_inumber(parent_inode);
+                  dir_add(created_dir, "..", parent_sector, true);
+                  dir_close(created_dir);
+              }
               success = true;
               done = true;
           }
@@ -114,6 +121,8 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
    or if an internal memory allocation fails. */
 //TODO: DOESN'T SUPPORT DIR
 struct myFile* filesys_open(const char* name) {
+    if (*name == '\0')
+        return false;
     struct myFile* new_file = (struct myFile*) malloc(sizeof (struct myFile));
     if (new_file == NULL) {
         return NULL;
@@ -126,6 +135,12 @@ struct myFile* filesys_open(const char* name) {
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
     char *name_dummy = name;
+    char last_name[NAME_MAX + 1];
+    // To support opening the current working directory
+    if (get_next_part(last_name, &name_dummy) == 0){
+        name = ".";
+    }
+    name_dummy = name;
     bool done = false;
     bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
@@ -163,6 +178,8 @@ struct file* filesys_open2(const char* name) {
    or if an internal memory allocation fails. */
 //TODO: REMOVE DIR
 bool filesys_remove(const char* name) {
+    if (*name == '\0')
+        return false;
     block_sector_t start_sector = thread_current()->pcb->cwd_sector;
     bool is_child_dir = false;
     struct inode *parent_inode = NULL;

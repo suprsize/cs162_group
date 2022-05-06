@@ -221,6 +221,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_READDIR: {
           int fd = args[1];
           // TODO: NEED VALIDATE THE THE BUFFER
+
+          // TODO: NEED TO IGNORE . ..
           char* name_buffer = args[2];
           lock_acquire(file_lock);
           f->eax = do_readdir(fd, name_buffer);

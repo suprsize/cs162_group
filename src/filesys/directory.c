@@ -71,9 +71,7 @@ bool is_dir_empty(struct dir* dir) {
     char name[NAME_MAX + 1];
     int count = 0;
     while (dir_readdir(dir, name)) {
-        count++;
-        if (count > 2)
-            return false;
+        return false;
     }
     return true;
 }
@@ -209,7 +207,7 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name, ".") != 0 && strcmp(e.name, "..") != 0) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
