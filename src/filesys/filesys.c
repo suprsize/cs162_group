@@ -49,6 +49,10 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   bool done = false;
   char * name_dummy = name;
   char last_name[NAME_MAX + 1];
+  if (is_dir) {
+      //initial_size passed in is number of entries in the directory not the actual size
+      initial_size *= sizeof (struct dir_entry);
+  }
   success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
   if (success) {
       if (child_inode != NULL) {

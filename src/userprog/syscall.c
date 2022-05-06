@@ -204,9 +204,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       }
 
       case SYS_MKDIR: {
-          int fd = args[1];
-          lock_acquire(file_lock);
-          lock_release(file_lock);
+          char *filename = args[1];
+          //TODO: CHANGE SIZE OF ENTRIES
+          unsigned int initial_size = 15;
+          if (is_valid_ptr(filename)) {
+              lock_acquire(file_lock);
+              f->eax = filesys_create(filename, initial_size, true);
+              lock_release(file_lock);
+              break;
+          }
+          invalid_ptr = true;
           break;
       }
 
