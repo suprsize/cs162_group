@@ -183,41 +183,34 @@ struct file* filesys_open2(const char* name) {
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
-//TODO: REMOVE DIR
+//TODO: ABSOLUTE PATH
 bool filesys_remove(const char* name) {
     if (*name == '\0')
         return false;
-    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    block_sector_t cwd_sector = thread_current()->pcb->cwd_sector;
+    block_sector_t start_sector = cwd_sector;
     bool is_child_dir = false;
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
-    char *name_dummy = name;
-    char last_name[NAME_MAX + 1];
-    bool done = false;
-    bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
+    char *name_ptr = name;
+    bool success = dir_lookup_deep(start_sector, name_ptr, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
-        if (child_inode == NULL) {
-            inode_close(child_inode);
-            success = false;
-        } else {
-            struct dir* dir = dir_open(parent_inode);
-            if (!is_dir_empty(dir))
-                success = false;
-            else {
-                int read = get_next_part(last_name, &name);
-                while(read == 1) {
-                    read = get_next_part(last_name, &name);
-                }
-                if (read == -1) {
-                    // getting last name give error so abort
-                    dir_close(dir);
-                    return false;
-                }
-                //Don't close parent_inode bkz dir_close does
-                success = dir != NULL && dir_remove(dir, last_name);
-            }
-            dir_close(dir);
+        char last_name[NAME_MAX + 1];
+        int read = get_next_part(last_name, &name);
+        while (read == 1) {
+            read = get_next_part(last_name, &name);
         }
+        success = read != -1;
+        struct dir* dir_child = dir_open(child_inode);
+        success = success && dir_child != NULL && inode_get_inumber(child_inode) != cwd_sector && is_dir_empty(dir_child);
+        dir_close(dir_child); // child_inode is closed here
+        if (success) {
+            struct dir *parent_dir = dir_open(parent_inode);
+            success = parent_dir != NULL && dir_remove(parent_dir, last_name);
+            dir_close(parent_dir);
+            parent_inode = NULL;
+        }
+        inode_close(parent_inode);
     }
   return success;
 }
