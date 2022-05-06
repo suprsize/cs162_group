@@ -22,6 +22,7 @@ void close_file(int fd);
 bool do_readdir(int fd, char* name_buffer);
 bool do_is_dir(int fd);
 int fd_to_inumber(int fd);
+struct myFile* get_myFile(int fd);
 
 struct process* get_pcb_by_name(char* filename);
 

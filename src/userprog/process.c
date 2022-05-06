@@ -14,6 +14,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -411,7 +412,7 @@ int fd_to_inumber(int fd) {
         }
         inum = inode_get_inumber(inode);
     }
-    inum;
+    return inum;
 }
 
 /* A thread function that loads a user process and starts it

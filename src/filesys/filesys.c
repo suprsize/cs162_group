@@ -8,6 +8,8 @@
 #include "filesys/directory.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "threads/malloc.h"
+
 
 
 /* Partition that contains the file system. */
@@ -91,7 +93,7 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
     block_sector_t inode_sector = 0;
     struct dir* dir = dir_open_root();
     bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-               inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, name, inode_sector, is_dir));
+               inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, name, inode_sector, false));
     if (!success && inode_sector != 0)
         free_map_release(inode_sector, 1);
     dir_close(dir);
@@ -117,7 +119,6 @@ struct myFile* filesys_open(const char* name) {
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
     char *name_dummy = name;
-    struct file *file_ptr = NULL;
     bool done = false;
     bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
@@ -140,7 +141,7 @@ struct myFile* filesys_open(const char* name) {
 }
 
 struct file* filesys_open2(const char* name) {
-  struct dir* dir = dir_open_cwd();
+  struct dir* dir = dir_open_root();
   struct inode* inode = NULL;
   if (dir != NULL)
     dir_lookup(dir, name, &inode, NULL);
