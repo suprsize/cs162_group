@@ -39,7 +39,6 @@ struct retval {
   int value; /* The return status code. */
   bool load_success; /* Did load() work? */
   struct semaphore wait_sema; /* semaphore to wait for return code. */
-  struct semaphore wait_load; /* semaphore to tell parent that load is successful or not. */
   struct lock ref_cnt_lock; /* Lock for ref count. */
 
   struct list_elem elem; /* List element so parent can keep track of stuff. */
@@ -61,6 +60,7 @@ struct process {
   struct list file_descriptors; /* File descriptor lists */
   struct lock filesys_lock;
 
+  struct lock children_list_lock;
   struct list children; /* Keep track of children processes and their respective retvals */
   struct retval* retval; /* Return value structure where we store our exit codes. */
   struct list_elem elem; /* List element so parent can keep track of stuff. */

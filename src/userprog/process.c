@@ -49,7 +49,7 @@ struct retval* generate_retval() {
   }
 
   _retval->value = -1;
-  _retval->load_success = -1;
+  _retval->load_success = 0;
   _retval->tid = thread_current()->tid;
 
   // the parent references this in the children list.
@@ -58,7 +58,6 @@ struct retval* generate_retval() {
   _retval->ref_cnt = 2;
 
   sema_init(&(_retval->wait_sema), 0);
-  sema_init(&(_retval->wait_load), 0);
   lock_init(&(_retval->ref_cnt_lock));
 
   return _retval;
@@ -85,6 +84,7 @@ bool populate_pcb(struct process* pcb) {
 
   // initialize the global lock of filesys calls
   lock_init(&t->pcb->filesys_lock);
+  lock_init(&t->pcb->children_list_lock);
 
   pcb->fd_index = 2;
 
@@ -149,7 +149,6 @@ pid_t process_execute(const char* file_name) {
   struct process* current_pcb;
   struct retval* child_retval;
 
-
 //  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
   current_pcb = thread_current()->pcb;
 
@@ -181,37 +180,37 @@ pid_t process_execute(const char* file_name) {
 
   child_thread = thread_get(tid);
 
+
   /* Wait until child has created the PCB with its
    * retval struct. */
   sema_down(&(child_thread->pcb_ready));
+
+  // thi shit is FREEd
   child_pcb = child_thread->pcb;
-
-
+  //
   // Neccesary.
   // there is a chance that PCB allocation fails.
   if (child_pcb == NULL)  {
-    return tid;
+    return TID_ERROR;
   }
-
-  /* Add the PCB to the list of PCBs. */
-  lock_acquire(&(pcb_list_lock));
-  list_push_back(&(pcb_list), &(child_pcb->elem));
-  lock_release(&(pcb_list_lock));
 
   child_retval = child_pcb->retval;
 
   /* Ensure that LOAD has correctly worked. */
-  sema_down(&(child_retval->wait_load));
   bool success_rv = child_retval->load_success;
 
   /* Load fails */
   if (!success_rv) {
+    free(child_pcb);
     return -1;
   }
-
   
   /* Push the child retval struct into current PCB's children list. */
+  lock_acquire(&current_pcb->children_list_lock);
   list_push_back(&current_pcb->children, &child_retval->elem);
+  lock_release(&current_pcb->children_list_lock);
+
+  sema_up(&child_thread->execute_ack);
 
   return tid;
 }
@@ -399,10 +398,6 @@ static void start_process(void* args) {
 
   /* Initialize process control block */
   success = pcb_success = populate_pcb(new_pcb);
-
-  /* Indicate to parent thread that PCB is ready.*/
-  sema_up(&(t->pcb_ready));
-
   /* Initialize interrupt frame and load executable. */
   int length = strcspn(file_name, " ");
   char file_name_cpy[length + 1];
@@ -422,7 +417,6 @@ static void start_process(void* args) {
     /* Indicate to the parent proc that we loaded
      * the program successfully. */
     t->pcb->retval->load_success = success;
-    sema_up(&(t->pcb->retval->wait_load));
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -431,10 +425,11 @@ static void start_process(void* args) {
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
+    /* Indicate to parent that the PCB is fucked */
+    t->pcb->retval->load_success = 0;
     t->pcb = NULL;
 
-    /* Indicate to parent that the PCB is fucked */
-    sema_up(& (t->pcb_ready));
+    sema_up(&t->pcb_ready);
     free(pcb_to_free);
     return;
   }
@@ -510,10 +505,16 @@ static void start_process(void* args) {
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
-  if (!success) {
-    // sema_up(&temporary);
+  if (!success)
     thread_exit();
-  }
+
+  /* Add the PCB to the list of PCBs. */
+  lock_acquire(&(pcb_list_lock));
+  list_push_back(&(pcb_list), &(t->pcb->elem));
+  lock_release(&(pcb_list_lock));
+
+  /* Indicate to parent thread that PCB is ready.*/
+  sema_up(&(t->pcb_ready));
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -543,6 +544,7 @@ int process_wait(pid_t child_pid) {
   children = &(thread_current()->pcb->children);
 
   /* Find the child process retval. */
+  lock_acquire(&thread_current()->pcb->children_list_lock);
   struct list_elem* e;
   for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     struct retval* _retval = list_entry(e, struct retval, elem);
@@ -553,6 +555,7 @@ int process_wait(pid_t child_pid) {
       child_retval = _retval;
     }
   }
+  lock_release(&thread_current()->pcb->children_list_lock);
 
   /* Not a valid PID */
   if (child_retval == NULL) {
@@ -611,6 +614,8 @@ void process_exit(int exit_code) {
   struct list* children_retvals;
   uint32_t* pd;
 
+  sema_down(&thread_current()->execute_ack);
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -665,6 +670,7 @@ void process_exit(int exit_code) {
   // TODO is this how we free a list ?
   struct list_elem* e;
   children_retvals = &(cur->pcb->children);
+  lock_acquire(&cur->pcb->children_list_lock);
   for (e = list_begin(children_retvals); e != list_end(children_retvals);
       e = list_next(e)) {
     struct retval* _retval = list_entry(e, struct retval, elem);
@@ -678,6 +684,8 @@ void process_exit(int exit_code) {
       lock_release(&(_retval->ref_cnt_lock));
     }
   }
+
+  lock_release(&cur->pcb->children_list_lock);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

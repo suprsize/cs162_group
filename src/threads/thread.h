@@ -97,6 +97,7 @@ struct thread {
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */
   struct semaphore pcb_ready; /* Indicates to waiting process when PCB is initialized. */
+  struct semaphore execute_ack; /* Indicates to waiting process when PCB is initialized. */
 
 #endif
 
