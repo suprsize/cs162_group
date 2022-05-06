@@ -180,6 +180,14 @@ bool filesys_remove(const char* name) {
   return success;
 }
 
+
+bool filesys_remove2(const char* name) {
+    struct dir* dir = dir_open_root();
+    bool success = dir != NULL && dir_remove(dir, name);
+    dir_close(dir);
+    return success;
+}
+
 bool filesys_chdir(const char* name) {
     block_sector_t start_sector = thread_current()->pcb->cwd_sector;
     bool is_child_dir = false;
@@ -191,7 +199,8 @@ bool filesys_chdir(const char* name) {
         if (child_inode == NULL || !is_child_dir) {
             success = false;
         } else {
-            thread_current()->pcb->cwd_sector = inode_get_inumber(child_inode);
+            block_sector_t inum = inode_get_inumber(child_inode);
+            thread_current()->pcb->cwd_sector = inum;
             success = true;
         }
         inode_close(child_inode);
