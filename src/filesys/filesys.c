@@ -72,6 +72,13 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
               success = false;
               free_map_release(inode_sector, 1);
           } else {
+//              if (is_dir) {
+//                  struct dir* created_dir = dir_open(inode_open(inode_sector));
+//                  dir_add(created_dir, ".", inode_sector, true);
+//                  block_sector_t parent_sector = inode_get_inumber(parent_inode);
+//                  dir_add(created_dir, "..", parent_sector, true);
+//                  dir_close(created_dir);
+//              }
               success = true;
               done = true;
           }
@@ -170,11 +177,14 @@ bool filesys_remove(const char* name) {
             success = false;
         } else {
             struct dir* dir = dir_open(parent_inode);
-            //TODO: THE NAME NEEDS TO BE A NAME AND NOT A PATH
-            while(get_next_part(last_name, &name) > 0) {
+            if (!is_dir_empty(dir))
+                success = false;
+            else {
+                while(get_next_part(last_name, &name) > 0) {
+                }
+                //Don't close parent_inode bkz dir_close does
+                success = dir != NULL && dir_remove(dir, last_name);
             }
-            //Don't close parent_inode bkz dir_close does
-            success = dir != NULL && dir_remove(dir, last_name);
             dir_close(dir);
         }
     }

@@ -32,7 +32,7 @@ struct dir* dir_open_cwd(void);
 struct dir* dir_reopen(struct dir*);
 void dir_close(struct dir*);
 struct inode* dir_get_inode(struct dir*);
-
+bool is_dir_empty(struct dir*);
 /* Reading and writing. */
 bool dir_lookup(const struct dir*, const char* name, struct inode**, bool* is_dir);
 bool dir_add(struct dir*, const char* name, block_sector_t, bool is_dir);

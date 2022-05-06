@@ -67,6 +67,18 @@ struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+bool is_dir_empty(struct dir* dir) {
+    char name[NAME_MAX + 1];
+    int count = 0;
+    while (dir_readdir(dir, name)) {
+        count++;
+        if (count > 2)
+            return false;
+    }
+    return true;
+}
+
+
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
