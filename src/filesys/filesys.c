@@ -161,12 +161,54 @@ bool filesys_remove(const char* name) {
             //TODO: THE NAME NEEDS TO BE A NAME AND NOT A PATH
             while(get_next_part(last_name, &name) > 0) {
             }
+            //Don't close parent_inode bkz dir_close does
             success = dir != NULL && dir_remove(dir, last_name);
             dir_close(dir);
         }
     }
   return success;
 }
+
+bool filesys_chdir(const char* name) {
+    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    bool is_child_dir = false;
+    struct inode *parent_inode = NULL;
+    struct inode *child_inode = NULL;
+    char *name_dummy = name;
+    bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
+    if (success) {
+        if (child_inode == NULL || !is_child_dir) {
+            success = false;
+        } else {
+            thread_current()->pcb->cwd_sector = inode_get_inumber(child_inode);
+            success = true;
+        }
+        inode_close(child_inode);
+        inode_close(parent_inode);
+    }
+    return success;
+}
+
+
+bool filesys_isdir(const char* path) {
+    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    bool is_child_dir = false;
+    struct inode *parent_inode = NULL;
+    struct inode *child_inode = NULL;
+    char *name_dummy = path;
+    bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
+    if (success) {
+        if (child_inode == NULL || !is_child_dir) {
+            success = false;
+        } else {
+            success = true;
+        }
+        inode_close(child_inode);
+        inode_close(parent_inode);
+    }
+    return success;
+}
+
 
 /* Formats the file system. */
 static void do_format(void) {

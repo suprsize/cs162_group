@@ -197,8 +197,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
      }
 
       case SYS_CHDIR: {
-          int fd = args[1];
+          char *path = args[1];
           lock_acquire(file_lock);
+          filesys_chdir(path);
           lock_release(file_lock);
           break;
       }
@@ -220,6 +221,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_READDIR: {
           int fd = args[1];
           lock_acquire(file_lock);
+
           lock_release(file_lock);
           break;
       }
@@ -227,6 +229,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_ISDIR: {
           int fd = args[1];
           lock_acquire(file_lock);
+
           lock_release(file_lock);
           break;
       }

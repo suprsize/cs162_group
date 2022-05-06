@@ -381,8 +381,9 @@ struct inode* inode_reopen(struct inode* inode) {
 /* Returns INODE's inode number. */
 block_sector_t inode_get_inumber(const struct inode* inode) {
   lock_acquire(&inode->meta_lock);
-  return inode->sector;
+  block_sector_t inumber = inode->sector;
   lock_release(&inode->meta_lock);
+  return inumber;
 }
 
 /* Closes INODE and writes it to disk.
