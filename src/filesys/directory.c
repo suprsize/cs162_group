@@ -216,7 +216,7 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
    next call will return the next file name part. Returns 1 if successful, 0 at
    end of string, -1 for a too-long file name part. */
-static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
+int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
     const char* src = *srcp;
     char* dst = part;
     /* Skip leading slashes.  If it's all slashes, we're done. */

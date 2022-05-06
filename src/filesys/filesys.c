@@ -48,6 +48,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   bool success = false;
   bool done = false;
   char * name_dummy = name;
+  char last_name[NAME_MAX + 1];
   success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
   if (success) {
       if (child_inode != NULL) {
@@ -56,8 +57,11 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
           success = false;
       } else {
           struct dir* dir = dir_open(parent_inode);
+          //TODO: THE NAME NEEDS TO BE A NAME AND NOT A PATH
+          while(get_next_part(last_name, &name) > 0) {
+          }
           success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-                     inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, name, inode_sector, is_dir));
+                     inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, last_name, inode_sector, is_dir));
           if (!success && inode_sector != 0) {
               success = false;
               free_map_release(inode_sector, 1);
@@ -95,6 +99,7 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
    otherwise.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
+//TODO: DOESN'T SUPPORT DIR
 struct file* filesys_open(const char* name) {
     block_sector_t start_sector = thread_current()->pcb->cwd_sector;
     bool is_child_dir = false;
@@ -118,6 +123,7 @@ struct file* filesys_open(const char* name) {
         return file_ptr;
     return file_ptr;
 }
+
 struct file* filesys_open2(const char* name) {
   struct dir* dir = dir_open_cwd();
   struct inode* inode = NULL;
@@ -132,11 +138,29 @@ struct file* filesys_open2(const char* name) {
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
+//TODO: REMOVE DIR
 bool filesys_remove(const char* name) {
-  struct dir* dir = dir_open_cwd();
-  bool success = dir != NULL && dir_remove(dir, name);
-  dir_close(dir);
-
+    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    bool is_child_dir = false;
+    struct inode *parent_inode = NULL;
+    struct inode *child_inode = NULL;
+    char *name_dummy = name;
+    char last_name[NAME_MAX + 1];
+    bool done = false;
+    bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
+    if (success) {
+        if (child_inode == NULL) {
+            inode_close(child_inode);
+            success = false;
+        } else {
+            struct dir* dir = dir_open(parent_inode);
+            //TODO: THE NAME NEEDS TO BE A NAME AND NOT A PATH
+            while(get_next_part(last_name, &name) > 0) {
+            }
+            success = dir != NULL && dir_remove(dir, last_name);
+            dir_close(dir);
+        }
+    }
   return success;
 }
 
@@ -149,3 +173,4 @@ static void do_format(void) {
   free_map_close();
   printf("done.\n");
 }
+

@@ -13,6 +13,9 @@
 
 struct inode;
 
+/* Path String parsing */
+int get_next_part(char part[NAME_MAX + 1], const char** srcp);
+
 /* Opening and closing directories. */
 bool dir_create(block_sector_t sector, size_t entry_cnt);
 struct dir* dir_open(struct inode*);

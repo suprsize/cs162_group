@@ -69,6 +69,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_OPEN: {
+        //TODO: SUPPORT DIR
       char *filename = args[1];
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
@@ -105,6 +106,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
      case SYS_READ: {
+         //TODO: ERROR ON DIR
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
@@ -127,7 +129,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
      }
 
      case SYS_WRITE: {
-       int fd = args[1];
+         //TODO: ERROR ON DIR
+         int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
        // TODO double check validation
@@ -184,7 +187,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
      }
 
      case SYS_CLOSE: {
-       int fd = args[1];
+         //TODO: SUPPORT DIR
+         int fd = args[1];
        //TODO WE ARE HAVE TO FREEING THE FD TABLE WHEN PROCESS CLOSES.
        lock_acquire(file_lock);
        close_file(fd);
