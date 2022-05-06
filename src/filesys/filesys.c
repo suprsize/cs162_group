@@ -126,8 +126,8 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
    otherwise.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
-//TODO: DOESN'T SUPPORT DIR
-struct myFile* filesys_open(const char* name) {
+//TODO: NEED TO FREE MYFILES
+struct myFile* filesys_open(const char* name, bool do_absolute_path) {
     if (*name == '\0')
         return false;
     struct myFile* new_file = (struct myFile*) malloc(sizeof (struct myFile));
@@ -136,26 +136,26 @@ struct myFile* filesys_open(const char* name) {
     }
     new_file->file_ptr = NULL;
     new_file->dir_ptr = NULL;
-
-    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+    block_sector_t  cwd_sector = thread_current()->pcb->cwd_sector;
+    block_sector_t start_sector = cwd_sector;
+    if (do_absolute_path)
+        start_sector = ROOT_DIR_SECTOR;
     bool is_child_dir = false;
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
     char *name_dummy = name;
     char last_name[NAME_MAX + 1];
-    // To support opening the current working directory
-    if (get_next_part(last_name, &name_dummy) == 0){
+    // TODO: NEED TO CHANGE THIS/ To support opening the current working directory
+    if (get_next_part(last_name, &name_dummy) == 0 && do_absolute_path){
         name = ".";
     }
     name_dummy = name;
-    bool done = false;
     bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
         if (child_inode == NULL) {
             inode_close(child_inode);
             success = false;
         } else {
-            done = true;
             success = true;
             if (is_child_dir)
                 new_file->dir_ptr = dir_open(child_inode);
@@ -164,8 +164,8 @@ struct myFile* filesys_open(const char* name) {
         }
         inode_close(parent_inode);
     }
-    if (done)
-        return new_file;
+    if (!success && !do_absolute_path)
+        new_file = filesys_open(name, true);
     return new_file;
 }
 
@@ -184,11 +184,13 @@ struct file* filesys_open2(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 //TODO: ABSOLUTE PATH
-bool filesys_remove(const char* name) {
+bool filesys_remove(const char* name, bool do_absolute_path) {
     if (*name == '\0')
         return false;
     block_sector_t cwd_sector = thread_current()->pcb->cwd_sector;
     block_sector_t start_sector = cwd_sector;
+    if (do_absolute_path)
+        start_sector = ROOT_DIR_SECTOR;
     bool is_child_dir = false;
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
@@ -196,9 +198,10 @@ bool filesys_remove(const char* name) {
     bool success = dir_lookup_deep(start_sector, name_ptr, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
         char last_name[NAME_MAX + 1];
-        int read = get_next_part(last_name, &name);
+        name_ptr = name;
+        int read = get_next_part(last_name, &name_ptr);
         while (read == 1) {
-            read = get_next_part(last_name, &name);
+            read = get_next_part(last_name, &name_ptr);
         }
         success = read != -1;
         struct dir* dir_child = dir_open(child_inode);
@@ -212,6 +215,8 @@ bool filesys_remove(const char* name) {
         }
         inode_close(parent_inode);
     }
+    if (!success && !do_absolute_path)
+        success = filesys_remove(name, true);
   return success;
 }
 

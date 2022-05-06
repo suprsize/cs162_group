@@ -59,7 +59,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
 
-        f->eax = filesys_remove(filename);
+        f->eax = filesys_remove(filename, false);
 
         lock_release(file_lock);
         break;
@@ -74,7 +74,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
 
-        struct myFile* opened_file = filesys_open(filename);
+        struct myFile* opened_file = filesys_open(filename, false);
 
         if (get_pcb_by_name(filename) != NULL) {
           file_deny_write(opened_file->file_ptr);

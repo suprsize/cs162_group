@@ -23,10 +23,10 @@ void filesys_init(bool format);
 void filesys_done(void);
 bool filesys_create(const char* name, off_t initial_size, bool is_dir);
 bool filesys_create2(const char* name, off_t initial_size, bool is_dir);
-struct myFile* filesys_open(const char* name);
+struct myFile* filesys_open(const char* name, bool do_absolute_path);
 struct file* filesys_open2(const char* name);
 
-bool filesys_remove(const char* name);
+bool filesys_remove(const char* name, bool do_absolute_path);
 bool filesys_remove2(const char* name);
 bool filesys_chdir(const char* name);
 bool filesys_isdir(const char* path);

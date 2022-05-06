@@ -842,7 +842,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   //TODO: ----------MIGHT HAVE TO MAKE SURE THAT IT IS ACTUALLY A FILE AND NOT A DIR----------------
   /* Open executable file. */
-  file = filesys_open(file_name)->file_ptr;
+  file = filesys_open(file_name, false)->file_ptr;
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
