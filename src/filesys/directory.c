@@ -246,7 +246,7 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
     if (*path == '\0')
         return false;
 
-    bool success = false;
+    bool success = true;
     bool hit_once = false;
     *inode = inode_open(start_dir_sector);
     if (*inode == NULL)
@@ -256,6 +256,7 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
     struct dir* parent_directory = NULL;
     char name[NAME_MAX + 1];
     while (get_next_part(name, &path) > 0) {
+        hit_once = true;
         if (!(*is_dir)) {
             success = false;
             break;
@@ -271,13 +272,12 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
         if (!dir_lookup(parent_directory, name, inode, is_dir)) {
             *inode = NULL;
             *is_dir = false;
+            *parent_inode = inode_reopen(*parent_inode);
             dir_close(parent_directory);
             break;
         }
         *parent_inode = inode_reopen(*parent_inode);
         dir_close(parent_directory);
-        hit_once = true;
-        success = true;
     }
     if (!hit_once) {
         *parent_inode = *inode;
