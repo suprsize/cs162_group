@@ -101,6 +101,8 @@ bool filesys_create(const char* name, off_t initial_length, bool is_dir, bool do
           dir_close(dir);
       }
   }
+  if (!success && do_absolute_path)
+      success = filesys_create(name, initial_length, is_dir, true);
   return success;
 }
 
@@ -290,10 +292,6 @@ bool filesys_isdir(const char* path) {
         inode_close(parent_inode);
     }
     return success;
-}
-
-bool is_open_fd(struct inode* inode, bool is_dir) {
-
 }
 
 
