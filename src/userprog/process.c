@@ -14,7 +14,6 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-#include "filesys/inode.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -24,6 +23,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/input.h"
+#include "devices/block.h"
+
 
 /* A list of all processes */
 struct list pcb_list;
@@ -294,6 +295,25 @@ struct myFile* get_myFile(int fd) {
   return NULL; // no such fd exist in the file descriptor table.
 }
 
+bool is_opened(block_sector_t target_sector) {
+    struct process* process = thread_current()->pcb;
+    struct list_elem *e;
+    struct list* fd_table = &(process->file_descriptors);
+    for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+        struct myFile* f = list_entry(e, struct myFile, elem);
+        struct inode* inode = NULL;
+        if (f->file_ptr != NULL) {
+            inode = file_get_inode(f->file_ptr);
+        } else if (f->dir_ptr != NULL) {
+            inode = dir_get_inode(f->dir_ptr);
+        }
+        block_sector_t sector = inode_get_inumber(inode);
+        if (sector == target_sector)
+            return true;
+    }
+    return false;
+}
+
 /* Returns a file from a given fd.
  * If file descriptor didn't exist, has been closed or
  * stdin, stderr, or stdout were passed in will return NULL
@@ -388,6 +408,7 @@ void close_file(int fd) {
 
 // The name size might be an issue since dir_readdir has a size limit on name
 bool do_readdir(int fd, char* name_buffer) {
+    // TODO: COULD HAVE A FUNCTION THAT GETS DIR SO WE MAKE SURE IT IS NOT FILE
     struct myFile* f = get_myFile(fd);
     if (f != NULL && f->dir_ptr != NULL) {
         return dir_readdir(f->dir_ptr, name_buffer);

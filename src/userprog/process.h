@@ -1,12 +1,8 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
-#include "threads/thread.h"
-#include "filesys/file.h"
-#include "filesys/filesys.h"
-
-#include "devices/block.h"
-
 #include <stdint.h>
+#include "threads/thread.h"
+#include "filesys/inode.h"
 
 // At most 8MB can be allocated to the stack
 // These defines will be used in Project 2: Multithreading
@@ -23,7 +19,7 @@ bool do_readdir(int fd, char* name_buffer);
 bool do_is_dir(int fd);
 int fd_to_inumber(int fd);
 struct myFile* get_myFile(int fd);
-
+bool is_opened(block_sector_t target_sector);
 struct process* get_pcb_by_name(char* filename);
 
 /* Custom filesys functions. */
