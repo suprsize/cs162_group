@@ -77,26 +77,34 @@ bool filesys_create(const char* name, off_t initial_length, bool is_dir, bool do
           while(read == 1) {
               read = get_next_part(last_name, &name);
           }
+
           if (read == -1) {
               // getting last name give error so abort
               dir_close(dir);
               return false;
           }
-          success = (dir != NULL) && free_map_allocate(1, &inode_sector) &&
-                     inode_create(inode_sector, initial_length, is_dir) && dir_add(dir, last_name, inode_sector, is_dir);
+
+          success = (dir != NULL)
+            && free_map_allocate(1, &inode_sector)
+            && inode_create(inode_sector, initial_length, is_dir)
+            && dir_add(dir, last_name, inode_sector, is_dir);
+
           if ((!success) && (inode_sector != 0)) {
               success = false;
               free_map_release(inode_sector, 1);
           } else {
+            success = true;
               if (is_dir) {
                   // Add . and .. to the director
                   struct dir* created_dir = dir_open(inode_open(inode_sector));
-                  dir_add(created_dir, ".", inode_sector, true);
+
                   block_sector_t parent_sector = inode_get_inumber(parent_inode);
-                  dir_add(created_dir, "..", parent_sector, true);
+
+                  success = (created_dir != NULL)
+                    && dir_add(created_dir, ".", inode_sector, true)
+                    && dir_add(created_dir, "..", parent_sector, true);
                   dir_close(created_dir);
               }
-              success = true;
           }
           dir_close(dir);
       }
