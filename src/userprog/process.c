@@ -87,8 +87,6 @@ bool populate_pcb(struct process* pcb) {
 
   pcb->fd_index = 2;
 
-  // TODO free everything below on exit.
-
   /* generate a pointer to the PCB's retval struct. */
   pcb->retval = generate_retval();
 
@@ -148,7 +146,6 @@ pid_t process_execute(const char* file_name) {
   struct process* current_pcb;
   struct retval* child_retval;
 
-//  sema_init(&temporary, 0); /* TODO: Fix temporary, James */
   current_pcb = thread_current()->pcb;
 
   /* Make a copy of FILE_NAME.
@@ -163,30 +160,14 @@ pid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
-  /** 
-   * TODO erase this for project submission
-   * Explanation on wtf is going on down below
-   *
-   * We need to wait for child to initialize the PCB. We wait
-   * by using the semaphore child_thread->pcb_ready.
-   *
-   * Once the PCB is initialized, we access the child's retval struct
-   * for two reasons:
-   *
-   * 1) Wait for the status of the load() function in start_process.
-   * 2) Add the child retval struct to the parent's children list.
-   */
-
   child_thread = thread_get(tid);
-
 
   /* Wait until child has created the PCB with its
    * retval struct. */
   sema_down(&(child_thread->pcb_ready));
 
-  // thi shit is FREEd
   child_pcb = child_thread->pcb;
-  //
+
   // Neccesary.
   // there is a chance that PCB allocation fails.
   if (child_pcb == NULL)  {
@@ -266,6 +247,7 @@ int add_fd(struct file* theFile) {
   struct process* process = thread_current()->pcb;
   struct myFile* newFile = (struct myFile*) malloc(sizeof (struct myFile));
   newFile->file_ptr = theFile;
+
   /* Add file to file descriptor table. */
   list_push_back(&process->file_descriptors, &newFile->elem);
 
@@ -308,7 +290,6 @@ int read_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
 
   switch (fd) {
-      //TODO need to test the stdin
 
     case STDIN_FILENO:
       for (unsigned int i = 0; i < count; i += 1) {
@@ -326,7 +307,6 @@ int read_file(int fd, uint32_t* buffer, size_t count) {
     default: {
       struct file * f = get_file(fd);
       if (f == NULL) {
-        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
         return -1;
       }
       retval = file_read(f, buffer, count);
@@ -340,7 +320,6 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
   int retval = -1;
 
   switch (fd) {
-      //TODO need to test the stdin
 
     case STDIN_FILENO:
       retval = -1;
@@ -351,13 +330,11 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       break;
 
     case 2:
-      //TODO IMPLEMENT STDERR
       break;
 
     default: {
       struct file * f = get_file(fd);
       if (f == NULL) {
-        //TODO MIGHT HAVE TO PASS AN ERROR OR STH
         return -1;
       }
       retval = file_write(f, buffer, count);
@@ -457,9 +434,6 @@ static void start_process(void* args) {
 
       /* Copy token to user stack */
       memcpy(if_.esp, token, _size);
-
-      /* Null terminate the argv arguments just in case! */
-      // memcpy(if_.esp + strlen(token), &NULL_TERMINATOR, 1);
   }
 
   _size = sizeof(char *) * (argc + 1);
@@ -470,13 +444,10 @@ static void start_process(void* args) {
   /* We align ESP to anticipate for argc/argv alignment. */
   if_.esp -= ((uint32_t) if_.esp - (2 * sizeof(void *))) % 16;
 
-  // memset(if_.esp, 0x0, align_size);
-
   /* Add NULL pointer sentinel according to spec */
   argv[argc] = NULL;
 
   /* Push argv pointers onto stack */
-  // if_.esp -= _size;
   memcpy(if_.esp, argv, _size);
 
   //Free temp argv
@@ -487,12 +458,10 @@ static void start_process(void* args) {
   /* Push argv */
   if_.esp -= sizeof(void *);
   memcpy(if_.esp, &argv_addr, sizeof(uint32_t *));
-  //  *((char ***) if_.esp) = if_.esp + 4;
 
   /* Push argc */
   if_.esp -= sizeof(void *);
   memcpy(if_.esp, &argc, sizeof(int));
-  //  *((int *) if_.esp) = argc;
 
   /* Push fake "return address" - maintain stack frame structure */
   if_.esp -= sizeof(void *);
@@ -537,7 +506,6 @@ int process_wait(pid_t child_pid) {
   struct list* children;
   struct retval* child_retval = NULL;
   int return_value = -1;
-  //sema_down(&temporary);
 
   children = &(thread_current()->pcb->children);
 
@@ -546,9 +514,6 @@ int process_wait(pid_t child_pid) {
   struct list_elem* e;
   for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     struct retval* _retval = list_entry(e, struct retval, elem);
-
-    // TODO are TID and PID the same? userprog.pdf has a thing
-    // on this but not sure...
     if (_retval->tid == child_pid) {
       child_retval = _retval;
     }
@@ -625,20 +590,11 @@ void process_exit(int exit_code) {
   list_remove(&(cur->pcb->elem));
   lock_release(&(pcb_list_lock));
 
-//  // TODO: free the file descriptor table
-//  // remove the elements from the fd list
-//  while(!list_empty(&cur->pcb->file_descriptors)) {
-//    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
-//    // free(list_entry(e, struct file, elem));
-//  }
-
-  // TODO: free the file descriptor table
   // remove the elements from the fd list
   while(!list_empty(&cur->pcb->file_descriptors)) {
     struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
     struct myFile* f = list_entry(e, struct myFile, elem);
     if (f->file_ptr != NULL) {
-      //TODO this might have to be done with a lock
       file_close(f->file_ptr);
     }
     free(f);
@@ -665,7 +621,6 @@ void process_exit(int exit_code) {
   /* Decrease ref count of all children retvals.
    * Free if neccesary. */
 
-  // TODO is this how we free a list ?
   struct list_elem* e;
   children_retvals = &(cur->pcb->children);
   lock_acquire(&cur->pcb->children_list_lock);
@@ -709,7 +664,6 @@ void process_exit(int exit_code) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-//  sema_up(&temporary); // TODO: Need to replace temporary - James
   thread_exit();
 }
 
