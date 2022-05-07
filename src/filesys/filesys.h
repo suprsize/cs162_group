@@ -28,7 +28,7 @@ struct file* filesys_open2(const char* name);
 
 bool filesys_remove(const char* name, bool do_absolute_path);
 bool filesys_remove2(const char* name);
-bool filesys_chdir(const char* name);
+bool filesys_chdir(const char* name, bool do_absolute_path);
 bool filesys_isdir(const char* path);
 
 
