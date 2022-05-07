@@ -21,6 +21,7 @@ static void do_format(void);
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
   fs_device = block_get_role(BLOCK_FILESYS);
+  cache_init();
   if (fs_device == NULL)
     PANIC("No file system device found, can't initialize file system.");
 

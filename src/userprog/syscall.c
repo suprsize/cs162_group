@@ -7,6 +7,8 @@
 #include "userprog/exception.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/block.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -22,11 +24,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-//  printf("System call number: %d\n", args[0]);
-// TODO argument checking
-
   bool invalid_ptr = !is_valid_ptr(args);
-  struct lock* file_lock = &thread_current()->pcb->filesys_lock;
 
   // Stack pointer is invalid.
   if (invalid_ptr) {
@@ -37,16 +35,21 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
 
+    case SYS_BLOCK_READS: {
+      f->eax = get_total_reads();
+      break;
+    }
+
+    case SYS_BLOCK_WRITES: {
+      f->eax = get_total_writes();
+      break;
+    }
 
     case SYS_CREATE: {
       char *filename = args[1];
       unsigned int initial_size = args[2];
       if (is_valid_ptr(filename)) {
-        lock_acquire(file_lock);
-
         f->eax = filesys_create(filename, initial_size, false, false);
-
-        lock_release(file_lock);
         break;
       }
       invalid_ptr = true;
@@ -54,14 +57,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_REMOVE: {
-      //TODO might have to do some checking about what is being removed.
       char * filename = args[1];
       if (is_valid_ptr(filename)) {
-        lock_acquire(file_lock);
-
         f->eax = filesys_remove(filename, false);
-
-        lock_release(file_lock);
         break;
       }
       invalid_ptr = true;
@@ -72,17 +70,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         //TODO: SUPPORT DIR
       char *filename = args[1];
       if (is_valid_ptr(filename)) {
-        lock_acquire(file_lock);
-
         struct myFile* opened_file = filesys_open(filename, false);
-
         if (get_pcb_by_name(filename) != NULL) {
           file_deny_write(opened_file->file_ptr);
         }
-
         f->eax = add_fd(opened_file);
-
-        lock_release(file_lock);
         break;
       }
       invalid_ptr = true;
@@ -91,17 +83,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_FILESIZE: {
       int fd = args[1];
-      lock_acquire(file_lock);
-
       struct file* file = get_file(fd);
       if (file != NULL) {
         f->eax = file_length(file);
-
-        lock_release(file_lock);
         break;
       }
-      invalid_ptr = true; //TODO change to a better name maybe
-      lock_release(file_lock);
+      invalid_ptr = true;
       break;
     }
 
@@ -110,18 +97,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
-       // TODO double check validation
        if (count < 0) {
          f->eax = -1;
          break;
        }
        if (is_valid_ptr(buffer)) {
-         lock_acquire(file_lock);
-
          int bytes_read = read_file(fd, buffer, count);
          f->eax = bytes_read;
-
-         lock_release(file_lock);
          break;
        }
        invalid_ptr = true;
@@ -133,18 +115,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
        int fd = args[1];
        uint32_t* buffer = args[2];
        size_t count = args[3];
-       // TODO double check validation
        if (count < 0) {
          f->eax = -1;
          break;
        }
        if (is_valid_ptr(buffer)) {
-         lock_acquire(file_lock);
-
          int bytes_written = write_file(fd, buffer, count);
          f->eax = bytes_written;
-
-         lock_release(file_lock);
          break;
        }
        invalid_ptr = true;
@@ -154,53 +131,35 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
      case SYS_SEEK: {
        int fd = args[1];
        unsigned int position = args[2];
-
-       lock_acquire(file_lock);
        struct file* file = get_file(fd);
        if (file != NULL) {
          file_seek(file, position);
-
-         lock_release(file_lock);
          break;
        }
-       invalid_ptr = true; //TODO change to a better name maybe
-
-       lock_release(file_lock);
+       invalid_ptr = true;
        break;
      }
 
      case SYS_TELL: {
        int fd = args[1];
-
-       lock_acquire(file_lock);
        struct file* file = get_file(fd);
        if (file != NULL) {
          f->eax = file_tell(file);
-
-         lock_release(file_lock);
          break;
        }
-       invalid_ptr = true; //TODO change to a better name maybe
-
-       lock_release(file_lock);
+       invalid_ptr = true;
        break;
      }
 
      case SYS_CLOSE: {
-         //TODO: SUPPORT DIR
-         int fd = args[1];
-       //TODO WE ARE HAVE TO FREEING THE FD TABLE WHEN PROCESS CLOSES.
-       lock_acquire(file_lock);
+       int fd = args[1];
        close_file(fd);
-       lock_release(file_lock);
        break;
      }
 
       case SYS_CHDIR: {
           char *path = args[1];
-          lock_acquire(file_lock);
           f->eax = filesys_chdir(path, false);
-          lock_release(file_lock);
           break;
       }
 
@@ -209,9 +168,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
           //TODO: CHANGE SIZE OF ENTRIES
           unsigned int initial_entries = 15;
           if (is_valid_ptr(filename)) {
-              lock_acquire(file_lock);
               f->eax = filesys_create(filename, initial_entries, true, false);
-              lock_release(file_lock);
               break;
           }
           invalid_ptr = true;
@@ -221,28 +178,20 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       case SYS_READDIR: {
           int fd = args[1];
           // TODO: NEED VALIDATE THE THE BUFFER
-
-          // TODO: NEED TO IGNORE . ..
           char* name_buffer = args[2];
-          lock_acquire(file_lock);
           f->eax = do_readdir(fd, name_buffer);
-          lock_release(file_lock);
           break;
       }
 
       case SYS_ISDIR: {
           int fd = args[1];
-          lock_acquire(file_lock);
           f->eax = do_is_dir(fd);
-          lock_release(file_lock);
           break;
       }
 
       case SYS_INUMBER: {
           int fd = args[1];
-          lock_acquire(file_lock);
           f->eax = fd_to_inumber(fd);
-          lock_release(file_lock);
           break;
       }
 

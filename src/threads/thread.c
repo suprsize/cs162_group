@@ -449,6 +449,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
   sema_init(& (t->pcb_ready), 0);
+  sema_init(& (t->execute_ack), 0);
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
@@ -541,7 +542,7 @@ void thread_switch_tail(struct thread* prev) {
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) {
+  if (prev != NULL && prev->pcb_ready.value == 0 && prev->status == THREAD_DYING && prev != initial_thread) {
     ASSERT(prev != cur);
     palloc_free_page(prev);
   }

@@ -40,6 +40,10 @@ enum block_type {
 
 const char* block_type_name(enum block_type);
 
+/* Testing */
+int get_total_writes(void);
+int get_total_reads(void);
+
 /* Finding block devices. */
 struct block* block_get_role(enum block_type);
 void block_set_role(enum block_type, struct block*);

@@ -12,6 +12,7 @@
 #ifdef FILESYS
 #include "devices/block.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #endif
 
 /* Keyboard control register port. */
@@ -26,7 +27,8 @@ static void print_stats(void);
    shutdown_configure().  If the shutdown type is SHUTDOWN_NONE
    (which is the default), returns without doing anything. */
 void shutdown(void) {
-  switch (how) {
+    cache_flush();
+    switch (how) {
     case SHUTDOWN_POWER_OFF:
       shutdown_power_off();
       break;

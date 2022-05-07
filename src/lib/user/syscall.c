@@ -14,6 +14,19 @@
     retval;                                                                                        \
   })
 
+
+/* Invokes syscall NUMBER, passing no arguments, and returns the
+   return value as an `int'. */
+#define syscall0(NUMBER)                                                                           \
+  ({                                                                                               \
+    int retval;                                                                                    \
+    asm volatile("pushl %[number]; int $0x30; addl $4, %%esp"                                      \
+                 : "=a"(retval)                                                                    \
+                 : [number] "i"(NUMBER)                                                            \
+                 : "memory");                                                                      \
+    retval;                                                                                        \
+  })
+
 /* Invokes syscall NUMBER, passing argument ARG0, and returns the
    return value as an `int'. */
 #define syscall1(NUMBER, ARG0)                                                                     \
@@ -155,6 +168,14 @@ void sema_up(sema_t* sema) {
   bool success = syscall1(SYS_SEMA_UP, sema);
   if (!success)
     exit(1);
+}
+
+unsigned int write_cnt() {
+  return syscall0(SYS_BLOCK_WRITES);
+}
+
+unsigned int read_cnt() {
+  return syscall0(SYS_BLOCK_READS);
 }
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
