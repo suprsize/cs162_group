@@ -101,7 +101,7 @@ bool filesys_create(const char* name, off_t initial_length, bool is_dir, bool do
           dir_close(dir);
       }
   }
-  if (!success && do_absolute_path)
+  if (!success && !do_absolute_path)
       success = filesys_create(name, initial_length, is_dir, true);
   return success;
 }
@@ -275,12 +275,21 @@ bool filesys_chdir(const char* name, bool do_absolute_path) {
 }
 
 
-bool filesys_isdir(const char* path) {
-    block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+bool filesys_isdir(const char* path, bool do_absolute_path) {
+    block_sector_t cwd_sector = thread_current()->pcb->cwd_sector;
+    block_sector_t start_sector = cwd_sector;
+    if (do_absolute_path)
+        start_sector = ROOT_DIR_SECTOR;
     bool is_child_dir = false;
     struct inode *parent_inode = NULL;
     struct inode *child_inode = NULL;
     char *name_ptr = path;
+    char last_name[NAME_MAX + 1];
+    //To support opening the current working directory
+    if ((get_next_part(last_name, &name_ptr) == 0) && do_absolute_path) {
+        path = ".";
+    }
+    name_ptr = path;
     bool success = dir_lookup_deep(start_sector, name_ptr, &parent_inode, &child_inode, &is_child_dir);
     if (success) {
         if (child_inode == NULL || !is_child_dir) {
@@ -291,6 +300,8 @@ bool filesys_isdir(const char* path) {
         inode_close(child_inode);
         inode_close(parent_inode);
     }
+    if ((!success) && (!do_absolute_path))
+        success = filesys_isdir(path, true);
     return success;
 }
 
