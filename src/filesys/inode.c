@@ -4,6 +4,7 @@
 #include <round.h>
 #include <string.h>
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
@@ -320,6 +321,10 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
 
     disk_inode->is_dir = is_dir;
     disk_inode->magic = INODE_MAGIC;
+    if (is_dir) {
+        //initial_size passed in is number of entries in the directory not the actual size
+        length *= sizeof (struct dir_entry);
+    }
     success = inode_resize(disk_inode, length);
 
     if (success)

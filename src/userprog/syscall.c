@@ -44,7 +44,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (is_valid_ptr(filename)) {
         lock_acquire(file_lock);
 
-        f->eax = filesys_create(filename, initial_size, false);
+        f->eax = filesys_create(filename, initial_size, false, false);
 
         lock_release(file_lock);
         break;
@@ -210,7 +210,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
           unsigned int initial_entries = 15;
           if (is_valid_ptr(filename)) {
               lock_acquire(file_lock);
-              f->eax = filesys_create(filename, initial_entries, true);
+              f->eax = filesys_create(filename, initial_entries, true, false);
               lock_release(file_lock);
               break;
           }

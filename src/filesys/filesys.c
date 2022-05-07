@@ -45,22 +45,25 @@ void filesys_done(void) { free_map_close(); }
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
-bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
+bool filesys_create(const char* name, off_t initial_length, bool is_dir, bool do_absolute_path) {
   if (*name == '\0')
       return false;
   block_sector_t inode_sector = 0;
-  block_sector_t start_sector = thread_current()->pcb->cwd_sector;
+  block_sector_t  cwd_sector = thread_current()->pcb->cwd_sector;
+  block_sector_t start_sector = cwd_sector;
+  if (do_absolute_path)
+      start_sector = ROOT_DIR_SECTOR;
   bool is_child_dir = false;
   struct inode* parent_inode = NULL;
   struct inode* child_inode = NULL;
   bool success = false;
-  bool done = false;
-  char * name_dummy = name;
-  char last_name[NAME_MAX + 1]; // TODO: TEMP FIX : make a big buffer so if the last name is big we can return false
-  if (is_dir) {
-      //initial_size passed in is number of entries in the directory not the actual size
-      initial_size *= sizeof (struct dir_entry);
+  char *name_dummy = name;
+  char last_name[NAME_MAX + 1];
+  //To support opening the current working directory
+  if (get_next_part(last_name, &name_dummy) == 0 && do_absolute_path){
+      name = ".";
   }
+  name_dummy = name;
   success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
   if (success) {
       if (child_inode != NULL) {
@@ -80,7 +83,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
               return false;
           }
           success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-                     inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, last_name, inode_sector, is_dir));
+                     inode_create(inode_sector, initial_length, is_dir) && dir_add(dir, last_name, inode_sector, is_dir));
           if (!success && inode_sector != 0) {
               success = false;
               free_map_release(inode_sector, 1);
@@ -94,7 +97,6 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
                   dir_close(created_dir);
               }
               success = true;
-              done = true;
           }
           dir_close(dir);
       }
@@ -148,17 +150,11 @@ struct myFile* filesys_open(const char* name, bool do_absolute_path) {
     }
     name_dummy = name;
     bool success = dir_lookup_deep(start_sector, name_dummy, &parent_inode, &child_inode, &is_child_dir);
-    if (success) {
-        if (child_inode == NULL) {
-            inode_close(child_inode);
-            success = false;
-        } else {
-            success = true;
-            if (is_child_dir)
-                new_file->dir_ptr = dir_open(child_inode);
-            else
-                new_file->file_ptr = file_open(child_inode);
-        }
+    if (success = success && child_inode != NULL) {
+        if (is_child_dir)
+            new_file->dir_ptr = dir_open(child_inode);
+        else
+            new_file->file_ptr = file_open(child_inode);
         inode_close(parent_inode);
     }
     if (!success && !do_absolute_path) {
