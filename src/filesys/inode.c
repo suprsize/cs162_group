@@ -99,7 +99,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   int l1_index;
   int l2_index;
   int l3_index;
-  block_read(fs_device, inode->sector, &buf);
+  cache_read(fs_device, inode->sector, &buf);
   ind = (struct inode_disk*) buf;
 
   /* We don't have data past the given size. */
@@ -117,17 +117,17 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
       struct indirect_inode* l2_arr;
       struct indirect_inode* l3_arr;
 
-      block_read(fs_device, ind->doubly_ptr, &buf);
+      cache_read(fs_device, ind->doubly_ptr, &buf);
       l2_arr = (struct indirect_inode *) buf;
 
-      block_read(fs_device, l2_arr->blocks[l2_index], &buf);
+      cache_read(fs_device, l2_arr->blocks[l2_index], &buf);
       l3_arr = (struct indirect_inode *) buf;
 
       return l3_arr->blocks[l3_index];
   }
 
   // singular indirect pointer
-  block_read(fs_device, ind->indirect_ptr, &buf);
+  cache_read(fs_device, ind->indirect_ptr, &buf);
   return ((struct indirect_inode *)buf)->blocks[l2_index];
 }
 
@@ -172,7 +172,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
             return false;
         }
     } else {
-        block_read(fs_device, ind->indirect_ptr, indir_inode);
+        cache_read(fs_device, ind->indirect_ptr, indir_inode);
     }
 
     // we traverse the indirect pointer tree ;)
@@ -186,7 +186,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         } else if ((new_length > (12 + i) * BLOCK_SECTOR_SIZE) && (indir_inode[i] == 0)) {
             if (!free_map_allocate(1, &indir_inode[i])) {
                 // we write so the resize can deallocate these things.
-                block_write(fs_device, ind->indirect_ptr, indir_inode);
+                cache_write(fs_device, ind->indirect_ptr, indir_inode);
                 inode_resize(ind, ind->length);
                 free(indir_inode);
                 return false;
@@ -199,7 +199,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         free_map_release(ind->indirect_ptr, 1);
         ind->indirect_ptr = 0;
     } else {
-        block_write(fs_device, ind->indirect_ptr, indir_inode);
+        cache_write(fs_device, ind->indirect_ptr, indir_inode);
     }
 
     free(indir_inode);
@@ -225,7 +225,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         return false;
     } else {
         // read that shit in
-        block_read(fs_device, ind->doubly_ptr, l2_arr);
+        cache_read(fs_device, ind->doubly_ptr, l2_arr);
     }
 
     // traverse the doubly pointer tree
@@ -243,8 +243,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         if ((l2_arr[i] == 0)
             && (new_length > (12 + 128 + (128 * i)) * BLOCK_SECTOR_SIZE)) {
           if (! free_map_allocate(1, &l2_arr[i])) {
-            block_write(fs_device, ind->doubly_ptr, l2_arr);
-//TODO:            block_write(fs_device, l2_arr[i], l3_arr);
+              cache_write(fs_device, ind->doubly_ptr, l2_arr);
             free(l3_arr);
             free(l2_arr);
             inode_resize(ind, ind->length);
@@ -252,7 +251,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
           }
         }
 
-        block_read(fs_device, l2_arr[i], l3_arr);
+        cache_read(fs_device, l2_arr[i], l3_arr);
 
         // TODO L3 traversal
         for (int j = 0; j < 128; j += 1) {
@@ -265,8 +264,8 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
               && (l3_arr[j] == 0)
               ) {
             if (!free_map_allocate(1, &l3_arr[j])) {
-              block_write(fs_device, ind->doubly_ptr, l2_arr);
-              block_write(fs_device, l2_arr[i], l3_arr);
+                cache_write(fs_device, ind->doubly_ptr, l2_arr);
+                cache_write(fs_device, l2_arr[i], l3_arr);
               inode_resize(ind, ind->length);
               free(l2_arr);
               free(l3_arr);
@@ -281,7 +280,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
           l2_arr[i] = 0;
         } else {
             //TODO MOH: ADDED AN ELSE
-            block_write(fs_device, l2_arr[i], l3_arr);
+            cache_write(fs_device, l2_arr[i], l3_arr);
         }
         free(l3_arr);
     }
@@ -290,7 +289,7 @@ bool inode_resize (struct inode_disk* ind, off_t new_length) {
         free_map_release(ind->doubly_ptr, 1);
         ind->doubly_ptr = 0;
     } else {
-        block_write(fs_device, ind->doubly_ptr, l2_arr);
+        cache_write(fs_device, ind->doubly_ptr, l2_arr);
     }
 
     ind->length = new_length;
@@ -331,7 +330,7 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
         success = inode_resize(disk_inode, length);
 
         if (success)
-            block_write(fs_device, sector, disk_inode);
+            cache_write(fs_device, sector, disk_inode);
         lock_release(disk_inode->resize_lock);
         free(disk_inode);
     }
@@ -413,7 +412,7 @@ void inode_close(struct inode* inode) {
     /* Deallocate blocks if removed. */
     if (inode->removed) {
       struct inode_disk ind;
-      block_read(fs_device, inode->sector, &ind);
+        cache_read(fs_device, inode->sector, &ind);
       lock_acquire(ind.resize_lock);
       //TODO: DO BLOCK READ
       inode_resize(&ind, 0);
@@ -507,19 +506,19 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     return 0;
 
   char buf [BLOCK_SECTOR_SIZE];
-  block_read(fs_device, inode->sector, buf);
+    cache_read(fs_device, inode->sector, buf);
   ind = (struct inode_disk*) buf;
 
   if ((ind->length < size + offset)) {
       lock_acquire(ind->resize_lock);
-      block_read(fs_device, inode->sector, buf);
+      cache_read(fs_device, inode->sector, buf);
       if ((ind->length < size + offset) && (!inode_resize(ind, size + offset))) {
           lock_release(ind->resize_lock);
           return 0;
       }
       lock_release(ind->resize_lock);
   }
-  block_write(fs_device, inode->sector, ind);
+  cache_write(fs_device, inode->sector, ind);
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
@@ -566,7 +565,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   }
   free(bounce);
 
-  block_write(fs_device, inode->sector, ind);
+  cache_write(fs_device, inode->sector, ind);
   return bytes_written;
 }
 
