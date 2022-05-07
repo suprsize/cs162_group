@@ -389,31 +389,13 @@ void cache_flush() {
     lock_acquire(&cache_lock);
     for (int i = 0; i < CACHE_SIZE; i++) {
         if (cache[i].valid && cache[i].dirty) {
-            block_write(fs_device, cache[i].sector, cache[i].buffer);
             cache[i].dirty = false;
+            lock_release(&cache_lock);
+            lock_acquire(&cache[i].entry_lock);
+            block_write(fs_device, cache[i].sector, cache[i].buffer);
+            lock_release(&cache[i].entry_lock);
+            lock_acquire(&cache_lock);
         }
     }
     lock_release(&cache_lock);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
