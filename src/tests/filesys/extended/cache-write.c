@@ -6,8 +6,7 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-#define BUF_SIZE 512*128
-
+#define BUF_SIZE 512 * 128
 
 static char buf[BUF_SIZE];
 static char lol[BUF_SIZE];
@@ -18,7 +17,7 @@ void test_main(void) {
   int fd;
   random_bytes(&lol, BUF_SIZE);
   random_bytes(&buf, BUF_SIZE);
-  
+
   int retval;
   // create file
   create(file_name, BUF_SIZE);
@@ -29,7 +28,6 @@ void test_main(void) {
   for (unsigned int i = 0; i < BUF_SIZE; i += 1) {
     write(fd, &buf, 1);
   }
-
 
   seek(fd, 0);
 

@@ -27,8 +27,8 @@ static void print_stats(void);
    shutdown_configure().  If the shutdown type is SHUTDOWN_NONE
    (which is the default), returns without doing anything. */
 void shutdown(void) {
-    cache_flush();
-    switch (how) {
+  cache_flush();
+  switch (how) {
     case SHUTDOWN_POWER_OFF:
       shutdown_power_off();
       break;

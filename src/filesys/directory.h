@@ -15,10 +15,10 @@ struct inode;
 
 /* A single directory entry. */
 struct dir_entry {
-    block_sector_t inode_sector; /* Sector number of header. */
-    char name[NAME_MAX + 1];     /* Null terminated file name. */
-    bool in_use;                 /* In use or free? */
-    bool is_dir;                 /* Is the entry for a dir */
+  block_sector_t inode_sector; /* Sector number of header. */
+  char name[NAME_MAX + 1];     /* Null terminated file name. */
+  bool in_use;                 /* In use or free? */
+  bool is_dir;                 /* Is the entry for a dir */
 };
 
 /* Path String parsing */
@@ -38,5 +38,6 @@ bool dir_lookup(const struct dir*, const char* name, struct inode**, bool* is_di
 bool dir_add(struct dir*, const char* name, block_sector_t, bool is_dir);
 bool dir_remove(struct dir*, const char* name);
 bool dir_readdir(struct dir*, char name[NAME_MAX + 1]);
-bool dir_lookup_deep(block_sector_t , const char* , struct inode** parent_inode, struct inode** inode, bool* is_dir);
+bool dir_lookup_deep(block_sector_t, const char*, struct inode** parent_inode, struct inode** inode,
+                     bool* is_dir);
 #endif /* filesys/directory.h */

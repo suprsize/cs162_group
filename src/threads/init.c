@@ -81,7 +81,7 @@ int main(void) {
   bss_init();
 
   /* Initialize FPU */
- // asm("fninit");
+  // asm("fninit");
 
   /* Break command line into arguments and parse options. */
   argv = read_command_line();

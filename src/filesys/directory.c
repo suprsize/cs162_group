@@ -14,8 +14,6 @@ struct dir {
   off_t pos;           /* Current position. */
 };
 
-
-
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
@@ -68,21 +66,21 @@ struct inode* dir_get_inode(struct dir* dir) {
 }
 
 bool is_dir_empty(struct dir* dir) {
-    char name[NAME_MAX + 1];
-    int count = 0;
-    while (dir_readdir(dir, name)) {
-        return false;
-    }
-    return true;
+  char name[NAME_MAX + 1];
+  int count = 0;
+  while (dir_readdir(dir, name)) {
+    return false;
+  }
+  return true;
 }
-
 
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
    directory entry if OFSP is non-null.
    otherwise, returns false and ignores EP and OFSP. */
-static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep, off_t* ofsp, bool* is_dir) {
+static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep, off_t* ofsp,
+                   bool* is_dir) {
   struct dir_entry e;
   size_t ofs;
 
@@ -215,85 +213,83 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   return false;
 }
 
-
-
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
    next call will return the next file name part. Returns 1 if successful, 0 at
    end of string, -1 for a too-long file name part. */
 int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
-    const char* src = *srcp;
-    char* dst = part;
-    /* Skip leading slashes.  If it's all slashes, we're done. */
-    while (*src == '/')
-        src++;
-    if (*src == '\0')
-        return 0;
-    /* Copy up to NAME_MAX character from SRC to DST.  Add null terminator. */
-    while (*src != '/' && *src != '\0') {
-        if (dst < part + NAME_MAX)
-            *dst++ = *src;
-        else
-            return -1;
-        src++;
-    }
-    *dst = '\0';
-    /* Advance source pointer. */
-    *srcp = src;
-    return 1;
+  const char* src = *srcp;
+  char* dst = part;
+  /* Skip leading slashes.  If it's all slashes, we're done. */
+  while (*src == '/')
+    src++;
+  if (*src == '\0')
+    return 0;
+  /* Copy up to NAME_MAX character from SRC to DST.  Add null terminator. */
+  while (*src != '/' && *src != '\0') {
+    if (dst < part + NAME_MAX)
+      *dst++ = *src;
+    else
+      return -1;
+    src++;
+  }
+  *dst = '\0';
+  /* Advance source pointer. */
+  *srcp = src;
+  return 1;
 }
 
-
 //TODO: MAKE SURE REOPEN CAN'T OPEN A REMOVED INODE
-bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct inode** parent_inode, struct inode** inode, bool* is_dir) {
-    ASSERT(path != NULL);
-    /* Check NAME for validity. */
-    if (*path == '\0')
-        return false;
+bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct inode** parent_inode,
+                     struct inode** inode, bool* is_dir) {
+  ASSERT(path != NULL);
+  /* Check NAME for validity. */
+  if (*path == '\0')
+    return false;
 
-    bool success = true;
-    bool hit_once = false;
-    *inode = inode_open(start_dir_sector);
-    if (*inode == NULL)
-        return false;
-    *parent_inode = NULL;
-    *is_dir = true;
-    struct dir* parent_directory = NULL;
-    char name[NAME_MAX + 1];
-    while (get_next_part(name, &path) > 0) {
-        hit_once = true;
-        if (!(*is_dir)) {
-            success = false;
-            break;
-        }
-        inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
-        *parent_inode = *inode;
-        *inode = NULL;
-        parent_directory = dir_open(*parent_inode);
-        if (parent_directory == NULL) {
-            inode_close(*parent_inode);
-            return false;
-        }
-        if (!dir_lookup(parent_directory, name, inode, is_dir)) {
-            *inode = NULL;
-            *is_dir = false;
-            *parent_inode = inode_reopen(*parent_inode);
-            dir_close(parent_directory);
-            break;
-        }
-        *parent_inode = inode_reopen(*parent_inode);
-        dir_close(parent_directory);
+  bool success = true;
+  bool hit_once = false;
+  *inode = inode_open(start_dir_sector);
+  if (*inode == NULL)
+    return false;
+  *parent_inode = NULL;
+  *is_dir = true;
+  struct dir* parent_directory = NULL;
+  char name[NAME_MAX + 1];
+  while (get_next_part(name, &path) > 0) {
+    hit_once = true;
+    if (!(*is_dir)) {
+      success = false;
+      break;
     }
-    if (!hit_once) {
-        *parent_inode = *inode;
-        *inode = NULL;
-        return true;
+    inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
+    *parent_inode = *inode;
+    *inode = NULL;
+    parent_directory = dir_open(*parent_inode);
+    if (parent_directory == NULL) {
+      inode_close(*parent_inode);
+      return false;
     }
-    if (!success || get_next_part(name, &path) != 0) {
-        inode_close(*parent_inode);
-        inode_close(*inode);
-        *parent_inode = NULL;
-        *inode = NULL;
-        return false;
+    if (!dir_lookup(parent_directory, name, inode, is_dir)) {
+      *inode = NULL;
+      *is_dir = false;
+      *parent_inode = inode_reopen(*parent_inode);
+      dir_close(parent_directory);
+      break;
     }
+    *parent_inode = inode_reopen(*parent_inode);
+    dir_close(parent_directory);
+  }
+  if (!hit_once) {
+    *parent_inode = *inode;
+    *inode = NULL;
     return true;
+  }
+  if (!success || get_next_part(name, &path) != 0) {
+    inode_close(*parent_inode);
+    inode_close(*inode);
+    *parent_inode = NULL;
+    *inode = NULL;
+    return false;
+  }
+  return true;
 }

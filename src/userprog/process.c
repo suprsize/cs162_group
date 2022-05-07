@@ -25,7 +25,6 @@
 #include "devices/input.h"
 #include "devices/block.h"
 
-
 /* A list of all processes */
 struct list pcb_list;
 struct lock pcb_list_lock;
@@ -53,7 +52,7 @@ struct retval* generate_retval() {
   _retval->tid = thread_current()->tid;
 
   // the parent references this in the children list.
-  // the child references this in the PCb. 
+  // the child references this in the PCb.
   // If this is the main proc (first process), change this to 1.
   _retval->ref_cnt = 2;
 
@@ -137,7 +136,6 @@ void userprog_init(void) {
   t->pcb->retval->ref_cnt = 1;
 }
 
-
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -174,10 +172,9 @@ pid_t process_execute(const char* file_name) {
 
   // Neccesary.
   // there is a chance that PCB allocation fails.
-  if (child_pcb == NULL)  {
+  if (child_pcb == NULL) {
     return TID_ERROR;
   }
-
 
   // Initialize the current working director of the child to same cwd as parent
   child_pcb->cwd_name = current_pcb->cwd_name;
@@ -193,7 +190,7 @@ pid_t process_execute(const char* file_name) {
     free(child_pcb);
     return -1;
   }
-  
+
   /* Push the child retval struct into current PCB's children list. */
   lock_acquire(&current_pcb->children_list_lock);
   list_push_back(&current_pcb->children, &child_retval->elem);
@@ -222,7 +219,6 @@ bool is_valid_args(void* stack_ptr, int argc) {
   return true;
 }
 
-
 /* Checks that the PTR is a valid ptr in current userspace. */
 bool is_valid_ptr(void* ptr) {
   uint32_t* pageDir;
@@ -246,10 +242,9 @@ bool is_valid_ptr(void* ptr) {
 }
 
 /* Adds a file descriptor to the current process. */
-int add_fd(struct myFile *my_file) {
+int add_fd(struct myFile* my_file) {
   /* File can't be a dummy or NULL */
-  if (my_file == NULL
-      || (my_file->file_ptr == NULL && my_file->dir_ptr == NULL)) {
+  if (my_file == NULL || (my_file->file_ptr == NULL && my_file->dir_ptr == NULL)) {
     return -1;
   }
 
@@ -264,7 +259,7 @@ int add_fd(struct myFile *my_file) {
 
 struct myFile* get_myFile(int fd) {
   struct process* process = thread_current()->pcb;
-  struct list_elem *e;
+  struct list_elem* e;
   struct list* fd_table = &(process->file_descriptors);
   if (fd < 3)
     return NULL; // file is stdin or stdout or stderr.
@@ -273,7 +268,8 @@ struct myFile* get_myFile(int fd) {
     if (i++ == fd) { // i++ increments _after_ evaluating
       struct myFile* f = list_entry(e, struct myFile, elem);
       //TODO: NEED TO CHANGE TO SUPPORT DIR
-      if (f->file_ptr != NULL || f->dir_ptr != NULL) // checks that the file descriptor is not closed.
+      if (f->file_ptr != NULL ||
+          f->dir_ptr != NULL) // checks that the file descriptor is not closed.
         return f;
       return NULL; // file is closed.
     }
@@ -282,22 +278,22 @@ struct myFile* get_myFile(int fd) {
 }
 
 bool is_opened(block_sector_t target_sector) {
-    struct process* process = thread_current()->pcb;
-    struct list_elem *e;
-    struct list* fd_table = &(process->file_descriptors);
-    for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-        struct myFile* f = list_entry(e, struct myFile, elem);
-        struct inode* inode = NULL;
-        if (f->file_ptr != NULL) {
-            inode = file_get_inode(f->file_ptr);
-        } else if (f->dir_ptr != NULL) {
-            inode = dir_get_inode(f->dir_ptr);
-        }
-        block_sector_t sector = inode_get_inumber(inode);
-        if (sector == target_sector)
-            return true;
+  struct process* process = thread_current()->pcb;
+  struct list_elem* e;
+  struct list* fd_table = &(process->file_descriptors);
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    struct myFile* f = list_entry(e, struct myFile, elem);
+    struct inode* inode = NULL;
+    if (f->file_ptr != NULL) {
+      inode = file_get_inode(f->file_ptr);
+    } else if (f->dir_ptr != NULL) {
+      inode = dir_get_inode(f->dir_ptr);
     }
-    return false;
+    block_sector_t sector = inode_get_inumber(inode);
+    if (sector == target_sector)
+      return true;
+  }
+  return false;
 }
 
 /* Returns a file from a given fd.
@@ -331,7 +327,7 @@ int read_file(int fd, uint32_t* buffer, size_t count) {
       break;
 
     default: {
-      struct file * f = get_file(fd);
+      struct file* f = get_file(fd);
       if (f == NULL) {
         return -1;
       }
@@ -351,7 +347,7 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       retval = -1;
       break;
     case STDOUT_FILENO:
-      putbuf((char *) buffer, count);
+      putbuf((char*)buffer, count);
       retval = count;
       break;
 
@@ -359,12 +355,12 @@ int write_file(int fd, uint32_t* buffer, size_t count) {
       break;
 
     default: {
-      struct file * f = get_file(fd);
+      struct file* f = get_file(fd);
       if (f == NULL) {
         return -1;
       }
       retval = file_write(f, buffer, count);
-   }
+    }
   }
   return retval;
 }
@@ -378,9 +374,9 @@ void close_file(int fd) {
       // To indicate that the file descriptor has been close.
       f->file_ptr = NULL;
     } else if (f->dir_ptr != NULL) {
-        dir_close(f->dir_ptr);
-        // To indicate that the file descriptor has been close.
-        f->dir_ptr = NULL;
+      dir_close(f->dir_ptr);
+      // To indicate that the file descriptor has been close.
+      f->dir_ptr = NULL;
     }
   } else {
     exit_with_error();
@@ -389,32 +385,32 @@ void close_file(int fd) {
 
 // The name size might be an issue since dir_readdir has a size limit on name
 bool do_readdir(int fd, char* name_buffer) {
-    // TODO: COULD HAVE A FUNCTION THAT GETS DIR SO WE MAKE SURE IT IS NOT FILE
-    struct myFile* f = get_myFile(fd);
-    if (f != NULL && f->dir_ptr != NULL) {
-        return dir_readdir(f->dir_ptr, name_buffer);
-    }
-    return false;
+  // TODO: COULD HAVE A FUNCTION THAT GETS DIR SO WE MAKE SURE IT IS NOT FILE
+  struct myFile* f = get_myFile(fd);
+  if (f != NULL && f->dir_ptr != NULL) {
+    return dir_readdir(f->dir_ptr, name_buffer);
+  }
+  return false;
 }
 
 bool do_is_dir(int fd) {
-    struct myFile* f = get_myFile(fd);
-    return (f != NULL  && f->dir_ptr != NULL);
+  struct myFile* f = get_myFile(fd);
+  return (f != NULL && f->dir_ptr != NULL);
 }
 
 int fd_to_inumber(int fd) {
-    struct myFile* f = get_myFile(fd);
-    block_sector_t inum = -1;
-    if (f != NULL) {
-        struct inode* inode = NULL;
-        if (f->dir_ptr != NULL) {
-            inode = dir_get_inode(f->dir_ptr);
-        } else if (f->file_ptr != NULL) {
-            inode = file_get_inode(f->file_ptr);
-        }
-        inum = inode_get_inumber(inode);
+  struct myFile* f = get_myFile(fd);
+  block_sector_t inum = -1;
+  if (f != NULL) {
+    struct inode* inode = NULL;
+    if (f->dir_ptr != NULL) {
+      inode = dir_get_inode(f->dir_ptr);
+    } else if (f->file_ptr != NULL) {
+      inode = file_get_inode(f->file_ptr);
     }
-    return inum;
+    inum = inode_get_inumber(inode);
+  }
+  return inum;
 }
 
 /* A thread function that loads a user process and starts it
@@ -445,7 +441,6 @@ static void start_process(void* args) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
 
-
     memcpy(file_name_cpy, file_name, length);
     file_name_cpy[length] = NULL;
     success = load(file_name_cpy, &if_.eip, &if_.esp);
@@ -474,35 +469,36 @@ static void start_process(void* args) {
   char file_name_copy[strlen(file_name) + 1];
   /* Copy file_name to file_name_copy with null term using strlcpy */
   strlcpy(file_name_copy, file_name, strlen(file_name) + 1);
-  
 
   /* Arguments can take up to a page of memory */
-  uint32_t *argv = palloc_get_page(0); int argc = 0;
+  uint32_t* argv = palloc_get_page(0);
+  int argc = 0;
 
-  char *token, *save_ptr; int _size;
-  
+  char *token, *save_ptr;
+  int _size;
+
   for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
-    token = strtok_r(NULL, " ", &save_ptr)) {
-      /* Find size of each token to push onto stack */
-      _size = strlen(token) + 1;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    /* Find size of each token to push onto stack */
+    _size = strlen(token) + 1;
 
-      /* Decrement user stack pointer */
-      if_.esp -= _size;
+    /* Decrement user stack pointer */
+    if_.esp -= _size;
 
-      /* Store address of token in argument addresses */
-      argv[argc++] = if_.esp;
+    /* Store address of token in argument addresses */
+    argv[argc++] = if_.esp;
 
-      /* Copy token to user stack */
-      memcpy(if_.esp, token, _size);
+    /* Copy token to user stack */
+    memcpy(if_.esp, token, _size);
   }
 
-  _size = sizeof(char *) * (argc + 1);
+  _size = sizeof(char*) * (argc + 1);
 
   if_.esp -= _size;
   /* stack-align, addresses are 4B */
 
   /* We align ESP to anticipate for argc/argv alignment. */
-  if_.esp -= ((uint32_t) if_.esp - (2 * sizeof(void *))) % 16;
+  if_.esp -= ((uint32_t)if_.esp - (2 * sizeof(void*))) % 16;
 
   /* Add NULL pointer sentinel according to spec */
   argv[argc] = NULL;
@@ -516,15 +512,15 @@ static void start_process(void* args) {
   uint32_t argv_addr = if_.esp;
 
   /* Push argv */
-  if_.esp -= sizeof(void *);
-  memcpy(if_.esp, &argv_addr, sizeof(uint32_t *));
+  if_.esp -= sizeof(void*);
+  memcpy(if_.esp, &argv_addr, sizeof(uint32_t*));
 
   /* Push argc */
-  if_.esp -= sizeof(void *);
+  if_.esp -= sizeof(void*);
   memcpy(if_.esp, &argc, sizeof(int));
 
   /* Push fake "return address" - maintain stack frame structure */
-  if_.esp -= sizeof(void *);
+  if_.esp -= sizeof(void*);
 
   /* Change the process name to get rid of the arguments. */
   strlcpy(t->pcb->process_name, &file_name_cpy, length + 1);
@@ -587,11 +583,10 @@ int process_wait(pid_t child_pid) {
 
   /* Non-blocking tries to acquire the lock to ensure that 
    * we only wait() once. */
-  if (lock_held_by_current_thread(&(child_retval->wait_lock))
-      || !lock_try_acquire(&(child_retval->wait_lock))) {
+  if (lock_held_by_current_thread(&(child_retval->wait_lock)) ||
+      !lock_try_acquire(&(child_retval->wait_lock))) {
     return return_value;
   }
-
 
   /* Begin wait for the exit code. */
   sema_down(&(child_retval->wait_sema));
@@ -617,8 +612,7 @@ int process_wait(pid_t child_pid) {
 struct process* get_pcb_by_name(char* filename) {
   struct list_elem* e;
   lock_acquire(&(pcb_list_lock));
-  for (e = list_begin(&(pcb_list)); e != list_end(&(pcb_list));
-      e = list_next(e)) {
+  for (e = list_begin(&(pcb_list)); e != list_end(&(pcb_list)); e = list_next(e)) {
     struct process* _pcb = list_entry(e, struct process, elem);
     if (strcmp(_pcb->process_name, filename) == 0) {
       lock_release(&(pcb_list_lock));
@@ -651,8 +645,8 @@ void process_exit(int exit_code) {
   lock_release(&(pcb_list_lock));
 
   // remove the elements from the fd list
-  while(!list_empty(&cur->pcb->file_descriptors)) {
-    struct list_elem *e = list_pop_front(&cur->pcb->file_descriptors);
+  while (!list_empty(&cur->pcb->file_descriptors)) {
+    struct list_elem* e = list_pop_front(&cur->pcb->file_descriptors);
     struct myFile* f = list_entry(e, struct myFile, elem);
     if (f->file_ptr != NULL) {
       file_close(f->file_ptr);
@@ -684,8 +678,7 @@ void process_exit(int exit_code) {
   struct list_elem* e;
   children_retvals = &(cur->pcb->children);
   lock_acquire(&cur->pcb->children_list_lock);
-  for (e = list_begin(children_retvals); e != list_end(children_retvals);
-      e = list_next(e)) {
+  for (e = list_begin(children_retvals); e != list_end(children_retvals); e = list_next(e)) {
     struct retval* _retval = list_entry(e, struct retval, elem);
 
     lock_acquire(&(_retval->ref_cnt_lock));

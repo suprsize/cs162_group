@@ -14,7 +14,6 @@
     retval;                                                                                        \
   })
 
-
 /* Invokes syscall NUMBER, passing no arguments, and returns the
    return value as an `int'. */
 #define syscall0(NUMBER)                                                                           \
@@ -170,12 +169,8 @@ void sema_up(sema_t* sema) {
     exit(1);
 }
 
-unsigned int write_cnt() {
-  return syscall0(SYS_BLOCK_WRITES);
-}
+unsigned int write_cnt() { return syscall0(SYS_BLOCK_WRITES); }
 
-unsigned int read_cnt() {
-  return syscall0(SYS_BLOCK_READS);
-}
+unsigned int read_cnt() { return syscall0(SYS_BLOCK_READS); }
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }

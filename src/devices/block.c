@@ -134,7 +134,6 @@ int get_total_writes(void) {
   return retval;
 }
 
-
 int get_total_reads(void) {
   unsigned long long retval = 0;
   for (int i = 0; i < BLOCK_ROLE_CNT; i++) {
