@@ -132,7 +132,6 @@ bool filesys_create2(const char* name, off_t initial_size, bool is_dir) {
    otherwise.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
-//TODO: NEED TO FREE MYFILES
 struct myFile* filesys_open(const char* name, bool do_absolute_path) {
   if (*name == '\0')
     return false;
@@ -186,7 +185,6 @@ struct file* filesys_open2(const char* name) {
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
-//TODO: ABSOLUTE PATH
 bool filesys_remove(const char* name, bool do_absolute_path) {
   if (*name == '\0')
     return false;

@@ -12,8 +12,6 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-// TODO implement free map lock
-// TODO implement open_inodes lock:w
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
@@ -138,7 +136,6 @@ void inode_init(void) {
 
 /* Resizes a disk inode (ind) with the new_length. */
 bool inode_resize(struct inode_disk* ind, off_t new_length) {
-  // TODO find a way to pass the lock in and make sure that we hold the lock when resizing.
   /* direct pointers */
   for (int i = 0; i < 12; i += 1) {
     if (new_length <= BLOCK_SECTOR_SIZE * i && ind->direct_ptrs[i] != 0) {
@@ -250,7 +247,6 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
 
     cache_read(fs_device, l2_arr[i], l3_arr);
 
-    // TODO L3 traversal
     for (int j = 0; j < 128; j += 1) {
       // shrink
       if ((new_length <= (12 + 128 + (128 * i) + j) * BLOCK_SECTOR_SIZE) && l3_arr[j] != 0) {
@@ -274,7 +270,6 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
       free_map_release(l2_arr[i], 1);
       l2_arr[i] = 0;
     } else {
-      //TODO MOH: ADDED AN ELSE
       cache_write(fs_device, l2_arr[i], l3_arr);
     }
     free(l3_arr);
@@ -407,7 +402,6 @@ void inode_close(struct inode* inode) {
       struct inode_disk ind;
       cache_read(fs_device, inode->sector, &ind);
       lock_acquire(ind.resize_lock);
-      //TODO: DO BLOCK READ
       inode_resize(&ind, 0);
       free_map_release(inode->sector, 1);
     }
@@ -432,7 +426,6 @@ void inode_remove(struct inode* inode) {
    than SIZE if an error occurs or end of file is reached. */
 off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset) {
 
-  // TODO must acquire the resize lock. FIND A WAY
   uint8_t* buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t* bounce = NULL;
@@ -480,7 +473,6 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
   }
   free(bounce);
 
-  // TODO release any locks
   return bytes_read;
 }
 

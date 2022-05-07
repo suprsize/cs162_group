@@ -238,7 +238,6 @@ int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
-//TODO: MAKE SURE REOPEN CAN'T OPEN A REMOVED INODE
 bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct inode** parent_inode,
                      struct inode** inode, bool* is_dir) {
   ASSERT(path != NULL);
@@ -261,7 +260,7 @@ bool dir_lookup_deep(block_sector_t start_dir_sector, const char* path, struct i
       success = false;
       break;
     }
-    inode_close(*parent_inode); //TODO: MIGHT HAVE TO DOUBLE CHECK THE CLOSING
+    inode_close(*parent_inode);
     *parent_inode = *inode;
     *inode = NULL;
     parent_directory = dir_open(*parent_inode);

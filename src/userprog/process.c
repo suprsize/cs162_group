@@ -267,7 +267,6 @@ struct myFile* get_myFile(int fd) {
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     if (i++ == fd) { // i++ increments _after_ evaluating
       struct myFile* f = list_entry(e, struct myFile, elem);
-      //TODO: NEED TO CHANGE TO SUPPORT DIR
       if (f->file_ptr != NULL ||
           f->dir_ptr != NULL) // checks that the file descriptor is not closed.
         return f;
@@ -385,7 +384,6 @@ void close_file(int fd) {
 
 // The name size might be an issue since dir_readdir has a size limit on name
 bool do_readdir(int fd, char* name_buffer) {
-  // TODO: COULD HAVE A FUNCTION THAT GETS DIR SO WE MAKE SURE IT IS NOT FILE
   struct myFile* f = get_myFile(fd);
   if (f != NULL && f->dir_ptr != NULL) {
     return dir_readdir(f->dir_ptr, name_buffer);
@@ -820,7 +818,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
-  //TODO: ----------MIGHT HAVE TO MAKE SURE THAT IT IS ACTUALLY A FILE AND NOT A DIR----------------
   /* Open executable file. */
   file = filesys_open(file_name, false)->file_ptr;
   if (file == NULL) {

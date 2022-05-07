@@ -67,7 +67,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_OPEN: {
-      //TODO: SUPPORT DIR
       char* filename = args[1];
       if (is_valid_ptr(filename)) {
         struct myFile* opened_file = filesys_open(filename, false);
@@ -93,7 +92,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_READ: {
-      //TODO: ERROR ON DIR
       int fd = args[1];
       uint32_t* buffer = args[2];
       size_t count = args[3];
@@ -111,7 +109,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     }
 
     case SYS_WRITE: {
-      //TODO: ERROR ON DIR
       int fd = args[1];
       uint32_t* buffer = args[2];
       size_t count = args[3];
@@ -165,7 +162,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_MKDIR: {
       char* filename = args[1];
-      //TODO: CHANGE SIZE OF ENTRIES
       unsigned int initial_entries = 15;
       if (is_valid_ptr(filename)) {
         f->eax = filesys_create(filename, initial_entries, true, false);
@@ -177,7 +173,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_READDIR: {
       int fd = args[1];
-      // TODO: NEED VALIDATE THE THE BUFFER
       char* name_buffer = args[2];
       f->eax = do_readdir(fd, name_buffer);
       break;
