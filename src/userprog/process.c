@@ -56,8 +56,8 @@ struct retval* generate_retval() {
   // If this is the main proc (first process), change this to 1.
   _retval->ref_cnt = 2;
 
-  sema_init(&(_retval->wait_sema), 0);
   lock_init(&(_retval->ref_cnt_lock));
+  sema_init(&(_retval->wait_sema), 0);
 
   return _retval;
 }
@@ -133,7 +133,9 @@ void userprog_init(void) {
   lock_release(&(pcb_list_lock));
 
   /* There is no parent of the init process. Retval of this is only referneced by me. */
+  lock_acquire(&t->pcb->retval->ref_cnt_lock);
   t->pcb->retval->ref_cnt = 1;
+  lock_release(&t->pcb->retval->ref_cnt_lock);
 }
 
 /* Starts a new thread running a user program loaded from
@@ -595,9 +597,12 @@ int process_wait(pid_t child_pid) {
   child_retval->ref_cnt -= 1;
 
   /* Remove the retval from the parent. */
+  lock_acquire(&thread_current()->pcb->children_list_lock);
   list_remove(&(child_retval->elem));
+  lock_release(&thread_current()->pcb->children_list_lock);
 
   if (child_retval->ref_cnt <= 0) {
+    lock_release(&(child_retval->ref_cnt_lock));
     free(child_retval);
   } else {
     lock_release(&(child_retval->ref_cnt_lock));
@@ -665,6 +670,8 @@ void process_exit(int exit_code) {
 
   /* Free the retval struct if no one is waiting. */
   if (proc_retval->ref_cnt <= 0) {
+    list_remove(&proc_retval->elem);
+    lock_release(&(proc_retval->ref_cnt_lock));
     free(proc_retval);
   } else {
     lock_release(&(proc_retval->ref_cnt_lock));
@@ -676,19 +683,24 @@ void process_exit(int exit_code) {
   struct list_elem* e;
   children_retvals = &(cur->pcb->children);
   lock_acquire(&cur->pcb->children_list_lock);
-  for (e = list_begin(children_retvals); e != list_end(children_retvals); e = list_next(e)) {
+
+  e = list_begin(children_retvals);
+  while (e != list_end(children_retvals)) {
+
     struct retval* _retval = list_entry(e, struct retval, elem);
 
     lock_acquire(&(_retval->ref_cnt_lock));
     _retval->ref_cnt -= 1;
 
+    e = list_next(e);
     if (_retval->ref_cnt <= 0) {
+      list_remove(&(_retval->elem));
+      lock_release(&(_retval->ref_cnt_lock));
       free(_retval);
     } else {
       lock_release(&(_retval->ref_cnt_lock));
     }
   }
-
   lock_release(&cur->pcb->children_list_lock);
 
   /* Destroy the current process's page directory and switch back
