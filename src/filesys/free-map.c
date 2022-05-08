@@ -35,12 +35,6 @@ bool free_map_allocate(size_t cnt, block_sector_t* sectorp) {
   if (sector != BITMAP_ERROR)
     *sectorp = sector;
   lock_release(&free_map_lock);
-  if (sector != BITMAP_ERROR) {
-      char* zero = calloc(1, BLOCK_SECTOR_SIZE);
-      if (zero != NULL)
-        cache_write(fs_device, sector, zero);
-      free(zero);
-  }
   return sector != BITMAP_ERROR;
 }
 

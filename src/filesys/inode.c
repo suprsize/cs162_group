@@ -137,6 +137,9 @@ void inode_init(void) {
 /* Resizes a disk inode (ind) with the new_length. */
 bool inode_resize(struct inode_disk* ind, off_t new_length) {
   /* direct pointers */
+  char zeros[BLOCK_SECTOR_SIZE];
+  memset(&zeros, 0, BLOCK_SECTOR_SIZE);
+
   for (int i = 0; i < 12; i += 1) {
     if (new_length <= BLOCK_SECTOR_SIZE * i && ind->direct_ptrs[i] != 0) {
       free_map_release(ind->direct_ptrs[i], 1);
@@ -146,6 +149,7 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
         inode_resize(ind, ind->length);
         return false;
       }
+      cache_write(fs_device, ind->direct_ptrs[i], &zeros);
     }
   }
 
@@ -166,6 +170,7 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
       free(indir_inode);
       return false;
     }
+    cache_write(fs_device, ind->indirect_ptr, &zeros);
   } else {
     cache_read(fs_device, ind->indirect_ptr, indir_inode);
   }
@@ -186,6 +191,7 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
         free(indir_inode);
         return false;
       }
+      cache_write(fs_device, indir_inode[i], &zeros);
     }
   }
 
@@ -213,11 +219,14 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
   memset(l2_arr, 0, BLOCK_SECTOR_SIZE);
 
   // create the base doubly pointer.
-  if (ind->doubly_ptr == 0 && (!free_map_allocate(1, &ind->doubly_ptr))) {
-    ind->doubly_ptr = 0;
-    inode_resize(ind, ind->length);
-    free(l2_arr);
-    return false;
+  if (ind->doubly_ptr == 0) {
+      if (!free_map_allocate(1, &ind->doubly_ptr)) {
+          ind->doubly_ptr = 0;
+          inode_resize(ind, ind->length);
+          free(l2_arr);
+          return false;
+      }
+      cache_write(fs_device, ind->doubly_ptr, &zeros);
   } else {
     // read that shit in
     cache_read(fs_device, ind->doubly_ptr, l2_arr);
@@ -243,6 +252,7 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
         inode_resize(ind, ind->length);
         return false;
       }
+      cache_write(fs_device, l2_arr[i], &zeros);
     }
 
     cache_read(fs_device, l2_arr[i], l3_arr);
@@ -262,6 +272,7 @@ bool inode_resize(struct inode_disk* ind, off_t new_length) {
           free(l3_arr);
           return false;
         }
+        cache_write(fs_device, l3_arr[j], &zeros);
       }
     }
 
